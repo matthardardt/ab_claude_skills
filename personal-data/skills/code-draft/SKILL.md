@@ -2,14 +2,16 @@
 name: code-draft
 description: >-
   Data-stack code generation for the ActBlue data team. Takes a business requirement and writes
-  production-ready code in the right language — Redshift SQL, Python (pandas/matplotlib/sklearn),
-  dbt models, or combinations. Validates all SQL against Redshift syntax rules before presenting.
-  Use when someone says: "write code for X", "draft SQL for X", "create a Python script that does X",
-  "build a dbt model for X", "write a query to find X", "I need code that does X", "generate code
-  for this", "help me code X", "write a query", "write an analysis script". Chain with
-  data-code-review for a review pass before use. Do NOT use for non-data coding (Rails, TypeScript,
-  infrastructure) — use actblue-engineering instead. Do NOT use when the user has code already and
-  wants review only — use data-code-review instead.
+  production-ready code ARTIFACTS in the right language — Python (pandas/matplotlib/sklearn), dbt
+  models, analysis scripts, or multi-language combinations. Validates all SQL against Redshift syntax
+  rules before presenting. Use when someone says: "write code for X", "create a Python script that
+  does X", "build a dbt model for X", "I need code that does X", "generate code for this", "help me
+  code X", "write an analysis script". Chain with data-code-review for a review pass before use.
+  Do NOT use for writing a standalone SQL query to pull or analyze warehouse data ("write a query",
+  "build me a query", "SQL to find X") — use write-query, which owns read/analysis SQL and grounds in
+  the real warehouse schema. Do NOT use for non-data coding (Rails, TypeScript, infrastructure) — use
+  actblue-engineering. Do NOT use when the user has code already and wants review only — use
+  data-code-review.
 metadata:
   actblue_permissions:
     mcp_tools: []
