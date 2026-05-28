@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
+  "name": "personal-productivity",
+  "version": "0.1.0",
+  "description": "Personal productivity skills. command-center: comprehensive daily briefing across Gmail, Slack, Google Calendar, and Jira.",
+  "keywords": [
+    "productivity",
+    "gmail",
+    "slack",
+    "calendar",
+    "jira",
+    "personal"
+  ]
+}

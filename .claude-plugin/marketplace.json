@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "personal-claude-skills",
+  "owner": {
+    "name": "mhardardt"
+  },
+  "metadata": {
+    "version": "0.1.0",
+    "description": "Personal Claude Code skills for Matthew Hardardt — data engineering, analytics, code review, exec presentation prep, and daily command center. Not for shared distribution."
+  },
+  "plugins": [
+    {
+      "name": "personal-data",
+      "source": "./personal-data",
+      "description": "Data stack skills: code-draft (Redshift/Python/dbt generation), data-code-review (harsh-but-fair review), insight-brief (strategic analysis + viz), exec-qa-prep (executive Q&A prep).",
+      "version": "0.1.0"
+    },
+    {
+      "name": "personal-productivity",
+      "source": "./personal-productivity",
+      "description": "Personal productivity skills: command-center (daily briefing across Gmail, Slack, Calendar, Jira).",
+      "version": "0.1.0"
+    }
+  ]
+}
