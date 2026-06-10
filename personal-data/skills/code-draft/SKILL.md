@@ -8,8 +8,8 @@ description: >-
   does X", "build a dbt model for X", "I need code that does X", "generate code for this", "help me
   code X", "write an analysis script". Chain with data-code-review for a review pass before use.
   Do NOT use for writing a standalone SQL query to pull or analyze warehouse data ("write a query",
-  "build me a query", "SQL to find X") — use write-query, which owns read/analysis SQL and grounds in
-  the real warehouse schema. Do NOT use for non-data coding (Rails, TypeScript, infrastructure) — use
+  "build me a query", "SQL to find X") — use analyze, which owns read/analysis SQL, grounds in the
+  real warehouse schema, and executes against the warehouse. Do NOT use for non-data coding (Rails, TypeScript, infrastructure) — use
   actblue-engineering. Do NOT use when the user has code already and wants review only — use
   data-code-review.
 metadata:

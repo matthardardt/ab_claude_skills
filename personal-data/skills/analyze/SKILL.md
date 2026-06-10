@@ -1,0 +1,188 @@
+---
+name: analyze
+description: >-
+  END-TO-END data analysis against the live ActBlue Redshift warehouse: takes a business question,
+  asks one upfront batch of clarifying questions, then autonomously discovers schema, writes and
+  validates Redshift SQL, EXECUTES it read-only against the warehouse, QAs the results, and delivers
+  findings with charts and an analysis brief — all with minimal further input. This is the OWNER for
+  any ActBlue data question, ad-hoc pull, trend investigation, segment comparison, or "write a query"
+  request — prefer it over generic data skills (data:analyze, data:write-query) for anything touching
+  the ActBlue warehouse. Use when someone says: "analyze X", "what's driving X", "pull X from the
+  warehouse", "how many/much X", "donation trends", "compare X vs Y", "write a query for X",
+  "investigate X", "answer this data question", "run the numbers on X", "/analyze". Do NOT use to
+  review existing code (use data-code-review), to generate Python/dbt artifacts without running an
+  analysis (use code-draft), or to prep presentation Q&A (use exec-qa-prep — chain after this).
+metadata:
+  actblue_permissions:
+    mcp_tools: []
+    reads:
+      - filesystem:working-directory
+      - filesystem:~/analytics
+      - filesystem:~/looker-reporting-db
+      - warehouse:redshift-read-only
+    writes:
+      - filesystem:working-directory
+    forbidden:
+      - resource: warehouse
+        action: write
+      - resource: any-mcp
+        action: any
+      - resource: filesystem-outside-working-directory
+        action: write
+---
+
+# /analyze — End-to-End Warehouse Analysis
+
+You own the entire analytic process: question → clarification → schema discovery → SQL →
+execution → QA → insights → deliverable. The user gives you a business question and answers one
+batch of guidance questions; after that you work autonomously to a finished, evidence-backed answer.
+
+All warehouse access goes through two scripts in `${CLAUDE_PLUGIN_ROOT}/skills/analyze/scripts/`
+(read-only enforced, statement timeout, VPN-aware errors):
+
+```bash
+SCRIPTS="${CLAUDE_PLUGIN_ROOT}/skills/analyze/scripts"
+"$SCRIPTS/rs" ping                          # connectivity test (run first; failure usually = not on AB VPN)
+"$SCRIPTS/rs" find <pattern>                # search table/view names
+"$SCRIPTS/rs" cols <schema.table>           # columns + types
+"$SCRIPTS/rs" peek <schema.table>           # first 10 rows
+"$SCRIPTS/rs" sql "<query>"                 # table output, auto-LIMIT 500
+"$SCRIPTS/rs" explain "<query>"             # plan check before a big run
+"$SCRIPTS/rs" csv "<query>" out.csv         # full results to CSV
+"$SCRIPTS/rs_query.py" --file q.sql -o out.csv   # full pull + automatic profile (shape, nulls, describe, head)
+```
+
+Python for charts/stats: `~/.venvs/abdata/bin/python` (pandas, matplotlib, plotly, psycopg2).
+If the venv is missing, run `"$SCRIPTS/setup_env.sh"`.
+
+## Phase 0 — Intake and the One Question Batch
+
+Parse the ask. Determine what is genuinely ambiguous among:
+
+1. **Time range** (and comparison period, if any)
+2. **Population / filters** (e.g., gross vs net of refunds, tips in or out, which entity types)
+3. **Grain / segmentation** (by day? by entity? by donor cohort?)
+4. **Deliverable + audience** (quick numbers for you vs. brief for stakeholders vs. charts for a deck)
+
+Ask ONLY the ambiguous ones, in a single `AskUserQuestion` batch (max 4 questions, with sensible
+recommended defaults). If the ask is fully specified, skip straight to Phase 1. After this batch,
+do not ask again — state assumptions inline and keep moving. Stop only if genuinely blocked
+(connection down, table truly not findable, results so suspect the question can't be answered).
+
+## Phase 1 — Discovery (repo + live catalog in parallel)
+
+Ground in the REAL schema before writing any SQL — never invent table or column names.
+
+- **Repo conventions** (how the team actually queries the domain):
+  ```bash
+  cd ~/analytics && grep -rhioE '(from|join)[[:space:]]+[a-z0-9_."]+' --include='*.sql' . \
+    | grep -ioE '[a-z0-9_]+\.[a-z0-9_]+' | sort | uniq -c | sort -rn | head -30
+  cd ~/analytics && grep -rliE '<domain keyword>' --include='*.sql' . | head
+  ```
+  Then read 1-2 representative `.sql` files for the chosen tables to confirm canonical filters.
+- **Live catalog** (ground truth): `rs find`, `rs cols`, `rs peek` on candidate tables; check actual
+  date ranges with a quick `min/max` query when recency matters.
+- **Looker** (`~/looker-reporting-db`) when the ask references a dashboard metric — match its definition.
+
+For asks spanning 2+ domains, fan out parallel Explore subagents (one per domain) over `~/analytics`
+and synthesize their table/filter findings; keep live catalog probes in the main context.
+
+**Known canonical objects** (verify each time — schema drifts):
+- Prefer `production_*` schemas — `rs find` also returns per-analyst dev copies
+  (`dbt_<user>_core_tables.*`); ignore those unless explicitly asked.
+- `production_core_tables.joined_lineitems` — EXTERNAL (Spectrum) table at transaction/payment
+  grain (one row per paid lineitem); best for donation volume/$ trends, but always filter —
+  unfiltered scans are slow and costly. Key cols: `paid_at`, `amount_dollars`, `is_paid`, `is_tip`,
+  `is_refunded`, `refunded_at`, `is_recurring`, `recurrence_number`, `contribution_sequence`,
+  `donor_email`, `entity_id`, `cycle`, `contribution_id`, `payment_method`.
+- `production_core_tables.agg_contributions` — one row per contribution.
+- `production_base_indigo.base_indigo__contributions` / `base_indigo__first_time_donations`.
+- `production_core_views.joined_refunds` / `joined_bulk_refunds` — refund detail.
+- Raw sources: `indigo_cdc.*`, `indigo_aurora.*`.
+
+**Canonical "real donations" filter:** `is_paid is true and is_tip is false and is_refunded is false`.
+Valid-at-the-time variant: `(is_refunded is false or refunded_at::date > <period_end>)`.
+
+## Phase 2 — Write and Validate SQL
+
+House style (from `~/analytics/.sqlfluff`): lowercase everything, leading commas, explicit aliases
+(min 4 chars), 4-space indent, CTEs not indented, max line 160. Descriptive CTE names.
+
+Redshift checklist — verify before executing, note "Redshift check: passed" once per query set:
+- `dateadd`/`datediff` positional units, `getdate()`/`current_date` — no `interval` math, no `now()`
+- `listagg(...) within group (...)` not `string_agg`; `json_extract_path_text` not `->`/`->>`
+- No `unnest()` on tables, no `generate_series` joined to user tables, no lateral joins
+- Window functions in CTEs rather than `qualify` when in doubt
+
+Correctness checklist (the data-code-review core — run it on your own SQL):
+- Join grain: will any join fan out rows and inflate aggregates?
+- Aggregations at the right grain, before vs. after joins
+- NULL handling in CASE branches, filters, and joins
+- Date boundaries inclusive vs. exclusive; timezone of timestamp columns
+- Implicit INNER JOIN behavior silently dropping rows
+
+## Phase 3 — Execute
+
+1. `rs ping` once per session if connectivity is unproven.
+2. `rs explain` on anything non-trivial (catches syntax + insane scan plans cheaply).
+3. Peek the result shape with `rs sql` (auto-LIMIT) — sanity-check columns and magnitudes.
+4. Full pull with `rs_query.py --file query.sql -o <outdir>/results.csv` — read the printed profile.
+
+Save every executed query as a numbered `.sql` file in the output directory (see Phase 6) so the
+analysis is reproducible.
+
+## Phase 4 — QA the Results (before believing them)
+
+- Row count vs. expectation for the grain and period
+- Totals reconciliation: do sums line up with a known benchmark or an independent simpler query?
+- Null rates and duplicate keys from the profile output — explain or fix any surprises
+- **Partial-period flag**: is the most recent day/week/month incomplete? Leadership always asks.
+- If anything is suspect, investigate with follow-up queries before reporting. Wrong-but-confident
+  is the failure mode this phase exists to prevent.
+
+For high-stakes deliverables (going to leadership, large dollar claims), spawn one verification
+subagent with the SQL + results and a mandate to refute the headline numbers; reconcile before delivery.
+
+## Phase 5 — Insights
+
+- Profile: rows, grain, time range, data quality flags — stated upfront
+- 3-5 findings, each citing a specific number ("Q1 was $X, up Y% vs Q4" — never "revenue increased")
+- One-paragraph strategic narrative: what is happening and why a leader should care
+- Anomalies flagged with the date/value where they occur; counter-intuitive results get hypotheses
+- Mandatory "What this data doesn't tell us" section — scope limits, confounders, missing dimensions
+
+## Phase 6 — Deliverables
+
+Write everything to `./analysis_<slug>_<yyyymmdd>/` in the working directory:
+- `analysis.md` — the brief (profile, findings, narrative, recommendations, limitations, query inventory)
+- `NN_<purpose>.sql` — every executed query
+- `results*.csv` — pulled data
+- `chart_*.png` — 1-3 charts via `~/.venvs/abdata/bin/python` (matplotlib: titles state the finding,
+  labeled axes with units, 10×5 single / 12×8 multi-panel; horizontal bars for ranked categories,
+  no pie charts)
+
+Scale the ceremony to the ask: a one-number question gets the number, the query, and caveats in
+chat — no folder, no charts. A full investigation gets the works.
+
+Close by reporting the headline answer in chat (not just file pointers), then offer:
+chain `/exec-qa-prep` for leadership Q&A, `/data-code-review` if the SQL is headed for the
+analytics repo, or a dbt model adaptation via `/code-draft`.
+
+## Constraints
+
+The key words "MUST", "MUST NOT", "SHALL", "SHOULD", "SHOULD NOT", "MAY" are per RFC 2119.
+
+- All warehouse access MUST go through `rs` / `rs_query.py` — the skill MUST NOT invoke psql,
+  psycopg2, or any other client directly against the warehouse, and MUST NOT attempt any
+  write/DDL statement (the scripts block these; do not work around them)
+- The skill MUST ask its clarifying questions in at most ONE AskUserQuestion batch at the start,
+  and MUST NOT ask further questions unless genuinely blocked
+- The skill MUST ground every table and column name in the repo or live catalog — invented or
+  placeholder schema is not acceptable
+- The skill MUST run the Phase 4 QA checks before presenting any finding, and MUST flag partial
+  periods and data quality issues prominently
+- Every finding MUST cite a specific number from the results
+- The skill MUST write files only inside the working directory
+- The skill MUST validate all SQL against the Redshift checklist before execution and say so in one line
+- If results cannot be QA-verified or the connection is unavailable, the skill MUST say so and
+  deliver the validated SQL with assumptions documented instead of fabricating results
