@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "personal-data",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Data science and analytics skills for the ActBlue data team. End-to-end warehouse analysis with live read-only Redshift execution (analyze), code artifact generation (code-draft), harsh-but-fair code review (data-code-review), and executive presentation Q&A prep (exec-qa-prep). Covers Redshift SQL, Python, and dbt workflows.",
   "keywords": [
     "data",
