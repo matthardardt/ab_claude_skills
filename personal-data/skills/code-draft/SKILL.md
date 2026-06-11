@@ -17,6 +17,8 @@ metadata:
     mcp_tools: []
     reads:
       - filesystem:working-directory
+      - filesystem:~/.claude/actblue-data-dictionary.md
+      - filesystem:~/.claude/actblue-data-dictionary-sources
     writes: []
     forbidden:
       - resource: filesystem
@@ -38,6 +40,9 @@ identify the right language and tooling, and produce working code that follows A
 - **ETL**: Hightouch, Fivetran — describe transformations in SQL/dbt, don't generate ETL configs unless asked
 - **OLTP**: PostgreSQL/Rails — for data reads only, never write-path code
 - **Looker**: LookML views/explores — reference `~/looker-reporting-db` before answering Looker questions
+- **ActBlue semantics**: before writing warehouse-touching code, read `~/.claude/actblue-data-dictionary.md`
+  (table grains + joins, counting keys, ET timestamps, refund conventions, fees, known traps); deep
+  per-source extracts in `~/.claude/actblue-data-dictionary-sources/`
 
 ## Workflow
 

@@ -47,6 +47,9 @@ You review analytics code with fresh eyes and return graded findings. You do not
    - ACH analysis gated on `paid_at >= '2026-04-20'` (legacy-ACH trap)?
    - Cents vs dollars columns (`extended_lineitems.amount` is cents); `istip` string vs boolean
    - Unfiltered Spectrum scans on `production_*` tables
+   - Timezone: indigo timestamps are US Eastern wall-clock — flag any `convert_timezone('UTC', …)` applied to them
+   - Counting key: contributions = `count(distinct contribution_sequence)`; flag `contribution_id` counts presented as "contributions"
+   - Refund convention matched to purpose: live (`is_paid`) vs published (`refund_id is null or refunded_<period> > paid_<period>`) — dictionary §6; known traps in dictionary §17
 5. **Compile check (optional, read-only)**: when the warehouse is reachable, `~/.claude/plugins/marketplaces/personal-claude-skills/personal-data/skills/analyze/scripts/rs explain "<query>"` to catch syntax errors and insane scan plans. Never run data-returning queries unless the dispatch prompt asks.
 6. **Style pass** (Suggestions only, never Blockers): `~/analytics/.sqlfluff` house style — lowercase, leading commas, aliases ≥4 chars, 4-space indent, max line 160. For LookML: dimension-over-table-calc for heavy/groupable logic, `fields:` allowlists on new joins.
 7. Return the report:

@@ -15,7 +15,8 @@ description: >-
 metadata:
   actblue_permissions:
     mcp_tools: []
-    reads: []
+    reads:
+      - filesystem:~/.claude/actblue-data-dictionary.md
     writes: []
     forbidden:
       - resource: any-mcp
@@ -44,8 +45,10 @@ Do not generate soft questions. Generate the ones that will make an underprepare
 
 ## Gotcha Category
 
-Always generate a dedicated set of questions that expose gaps. These come from outside perspectives
-that the presenter may not have anticipated:
+Always generate a dedicated set of questions that expose gaps. For ActBlue data stories, cross-check
+the numbers against `~/.claude/actblue-data-dictionary.md` §11 (official metric definitions) and
+§18 (open definition conflicts — NRR version, refund convention, tips in/out): "which definition did
+you use?" is a guaranteed leadership question. Gap sources the presenter may not have anticipated:
 - Data freshness and completeness (is the most recent period complete?)
 - Population definition (who is included and excluded, and why?)
 - Survivorship bias or selection effects in the data

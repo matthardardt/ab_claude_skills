@@ -12,6 +12,8 @@ metadata:
     reads:
       - filesystem:~/looker-reporting-db
       - filesystem:working-directory
+      - filesystem:~/.claude/actblue-data-dictionary.md
+      - filesystem:~/.claude/actblue-data-dictionary-sources
     writes: []
     forbidden:
       - resource: filesystem
@@ -26,7 +28,9 @@ metadata:
 
 You answer Looker/LookML questions grounded in the actual repo at `/Users/mhardardt/looker-reporting-db` — never from generic Looker knowledge alone. Your final message is consumed by the dispatching session; return the answer, citations, and any snippet in one structured report.
 
-Repo map: `views/` (key path: `views/dbt_core__views/dbt_core_tables__views/`), `models/`, `explores/`, `dashboards/`, `manifest.lkml` (constants live here, e.g. `ach_return_fee_blended`), `looker_style_guide.md` (read before authoring anything).
+Repo map: `views/` (key path: `views/dbt_core__views/dbt_core_tables__views/`; directory convention `views/dbt_<schema>__views/` → warehouse schema `production_<schema>`), `models/`, `explores/`, `dashboards/`, `manifest.lkml` (NOTE: a single `project_name` line as of 2026-05-27 — the `ach_return_fee_blended` constant is NOT in this repo; it likely lives in the separate ACH-dashboard repo), `looker_style_guide.md` (read before authoring anything).
+
+When the question is about business MEANING (what a measure/dimension means, which definition is canonical), consult `~/.claude/actblue-data-dictionary.md` (§3 grains/joins, §11 official metric definitions, §17 known LookML bugs — e.g. check_details is_wire/is_check both compile to is_ach) and the full Looker semantic inventory at `~/.claude/actblue-data-dictionary-sources/02_looker_repo.md` (models, explores + join map, view→table map, measure definitions, all with path:line refs).
 
 ## Workflow
 

@@ -19,6 +19,8 @@ metadata:
       - filesystem:working-directory
       - filesystem:~/analytics
       - filesystem:~/looker-reporting-db
+      - filesystem:~/.claude/actblue-data-dictionary.md
+      - filesystem:~/.claude/actblue-data-dictionary-sources
       - warehouse:redshift-read-only
     writes:
       - filesystem:working-directory
@@ -73,6 +75,11 @@ do not ask again — state assumptions inline and keep moving. Stop only if genu
 
 Ground in the REAL schema before writing any SQL — never invent table or column names.
 
+- **Data dictionary FIRST**: read `~/.claude/actblue-data-dictionary.md` — hard query rules (ET
+  timestamps, canonical filters, counting keys), table grains + canonical joins, the two refund
+  conventions, official metric definitions, and known traps, all confidence-tagged. Deep per-source
+  extracts (incl. full column dictionaries for 30 core tables) live in
+  `~/.claude/actblue-data-dictionary-sources/` — grep them before burning live catalog probes.
 - **Repo conventions** (how the team actually queries the domain):
   ```bash
   cd ~/analytics && grep -rhioE '(from|join)[[:space:]]+[a-z0-9_."]+' --include='*.sql' . \
@@ -98,7 +105,8 @@ and synthesize their table/filter findings; keep live catalog probes in the main
 - `production_core_tables.agg_contributions` — one row per contribution.
 - `production_base_indigo.base_indigo__contributions` / `base_indigo__first_time_donations`.
 - `production_core_views.joined_refunds` / `joined_bulk_refunds` — refund detail.
-- Raw sources: `indigo_cdc.*`, `indigo_aurora.*`.
+- Raw source: `indigo_aurora.*` (`indigo_cdc` was dropped Apr 2025 — older queries referencing it
+  need a schema swap; dbt docs still use it as a source NAME only).
 
 **Canonical "real donations" filter:** `is_paid is true and is_tip is false and is_refunded is false`.
 Valid-at-the-time variant: `(is_refunded is false or refunded_at::date > <period_end>)`.
@@ -118,7 +126,8 @@ Correctness checklist (the data-code-review core — run it on your own SQL):
 - Join grain: will any join fan out rows and inflate aggregates?
 - Aggregations at the right grain, before vs. after joins
 - NULL handling in CASE branches, filters, and joins
-- Date boundaries inclusive vs. exclusive; timezone of timestamp columns
+- Date boundaries inclusive vs. exclusive; timezone (indigo timestamps are US Eastern wall-clock —
+  never `convert_timezone('UTC', …)` them; Mixpanel `time` IS epoch UTC)
 - Implicit INNER JOIN behavior silently dropping rows
 
 ## Phase 3 — Execute

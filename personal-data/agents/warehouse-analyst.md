@@ -14,6 +14,7 @@ metadata:
       - filesystem:~/analytics
       - filesystem:~/looker-reporting-db
       - filesystem:~/.claude/actblue-data-dictionary.md
+      - filesystem:~/.claude/actblue-data-dictionary-sources
       - warehouse:redshift-read-only
     writes:
       - filesystem:working-directory
@@ -45,12 +46,12 @@ RS=~/.claude/plugins/marketplaces/personal-claude-skills/personal-data/skills/an
 "$RS/rs" csv "<query>" out.csv   # full results to CSV
 ```
 
-Cluster facts: `production_*`, `indigo_aurora`, `mixpanel` are EXTERNAL tables — query them with `rs` (NOT `rs_query.py`, whose read-only session rejects external tables). `indigo_cdc` does not exist — use `indigo_aurora`. `dbt_<user>_*` dev schemas are SAMPLED — never conclude "no data" from them. `rs` rejects SQL starting with a comment and `;` inside comments — `rs sql "$(grep -v '^--' file.sql)"`. Canonical real-donations filter: `is_paid is true and is_tip is false and is_refunded is false`. `extended_lineitems.amount` is CENTS; `joined_lineitems.amount_dollars` is dollars. Demographic joins via `md5(lower(email))`.
+Cluster facts: `production_*`, `indigo_aurora`, `mixpanel` are EXTERNAL tables — query them with `rs` (NOT `rs_query.py`, whose read-only session rejects external tables). `indigo_cdc` does not exist — use `indigo_aurora`. `dbt_<user>_*` dev schemas are SAMPLED — never conclude "no data" from them. `rs` rejects SQL starting with a comment and `;` inside comments — `rs sql "$(grep -v '^--' file.sql)"`. Canonical real-donations filter: `is_paid is true and is_tip is false and is_refunded is false`. `extended_lineitems.amount` is CENTS; `joined_lineitems.amount_dollars` is dollars. Demographic joins via `md5(lower(email))`. All indigo-derived timestamps are **US Eastern wall-clock, not UTC** — never `convert_timezone('UTC', …)` them.
 
 ## Workflow
 
 1. Parse the dispatch prompt. For anything left ambiguous, pick the most defensible assumption, record it, and continue — never block.
-2. If a domain term appears (express, formapp/DHQ, prepaid/gift card, foreign donor, Nacha/ACH compliance, political categorization, business-day math), read `~/.claude/actblue-data-dictionary.md` and use those definitions.
+2. Read `~/.claude/actblue-data-dictionary.md` before writing SQL — it covers hard query rules (ET timestamps, counting keys, the two refund conventions), core table grains + canonical joins, money/fees, donors/Express, entities/disbursements, formapp/DHQ, official metric definitions (NRR, blog toplines), compliance/fraud, ACH/Nacha, and known traps. Deep extracts (incl. column dictionaries for 30 core tables) in `~/.claude/actblue-data-dictionary-sources/` — grep those before burning live catalog probes.
 3. `rs ping` once if connectivity is unproven this session.
 4. Ground the schema before writing SQL: grep `~/analytics` for how the team queries the domain AND verify with `rs find` / `rs cols` / `rs peek`. Never invent table or column names.
 5. Write SQL in house style (lowercase, leading commas, aliases ≥4 chars, 4-space indent) and validate against the Redshift checklist: `dateadd`/`datediff` positional units, no `interval` math or `now()`, `listagg ... within group`, `json_extract_path_text`, no `generate_series` joined to user tables, no `unnest`/lateral, window-in-CTE over `qualify` when in doubt.
