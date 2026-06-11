@@ -12,8 +12,8 @@
     {
       "name": "personal-data",
       "source": "./personal-data",
-      "description": "Data stack skills: code-draft (Redshift/Python/dbt generation), data-code-review (harsh-but-fair review), insight-brief (strategic analysis + viz), exec-qa-prep (executive Q&A prep).",
-      "version": "0.1.0"
+      "description": "Data science and analytics skills for the ActBlue data team. End-to-end warehouse analysis with live read-only Redshift execution (analyze), code artifact generation (code-draft), harsh-but-fair code review (data-code-review), and executive presentation Q&A prep (exec-qa-prep). Covers Redshift SQL, Python, and dbt workflows.",
+      "version": "0.4.0"
     },
     {
       "name": "personal-productivity",
