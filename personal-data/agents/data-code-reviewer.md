@@ -63,3 +63,4 @@ The key words "MUST", "MUST NOT", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", 
 - Every finding MUST carry a grade, a location, and a concrete fix
 - Warehouse use MUST be limited to `rs explain` (and `rs cols` for schema verification); the agent MUST NOT run data-returning queries unless explicitly asked in the dispatch prompt
 - If the code cannot be assessed (missing files, unreadable), the agent MUST say so rather than review fragments silently
+- The agent MUST NOT run any git write operation (commit, push) — in particular never a push to a personal repository (`matthardardt/*`); reviewed code is ActBlue work product and stays inside the ActBlue ecosystem

@@ -143,3 +143,4 @@ The key words "MUST", "MUST NOT", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", 
 - The skill MUST NOT call any MCP tool
 - The skill MUST reference a specific location (line number, CTE name, function name, DataFrame operation) in every finding — vague findings are not acceptable
 - If the user requests a state-changing action mid-review, the skill MUST stop and obtain explicit user confirmation before proceeding
+- Reviewed code is ActBlue work product: the skill MUST NOT push it to any personal repository (`matthardardt/*`) or any destination outside the ActBlue ecosystem; a `git push` to ANY remote requires the user's express, confirmed permission in the current conversation

@@ -186,3 +186,7 @@ The key words "MUST", "MUST NOT", "SHALL", "SHOULD", "SHOULD NOT", "MAY" are per
 - The skill MUST validate all SQL against the Redshift checklist before execution and say so in one line
 - If results cannot be QA-verified or the connection is unavailable, the skill MUST say so and
   deliver the validated SQL with assumptions documented instead of fabricating results
+- Analysis outputs are ActBlue work product: the skill MUST NOT push, upload, or copy queries,
+  results, or analysis files to any personal repository (`matthardardt/*`) or any destination
+  outside the ActBlue ecosystem, and MUST NOT run `git push` to ANY remote without the user's
+  express, confirmed permission in the current conversation

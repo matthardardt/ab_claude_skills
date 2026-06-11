@@ -69,3 +69,4 @@ The key words "MUST", "MUST NOT", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", 
 - Every finding MUST cite a specific number from executed results, and partial periods MUST be flagged
 - The agent MUST write files only inside the working directory and MUST NOT call any MCP tool
 - The agent MUST NOT print or echo `REDSHIFT_*` credential values
+- All outputs are ActBlue work product: the agent MUST NOT run `git push` or send queries, results, or files to any personal repository (`matthardardt/*`) or any destination outside the ActBlue ecosystem — a push to ANY remote requires the user's express, confirmed permission relayed in the dispatch prompt

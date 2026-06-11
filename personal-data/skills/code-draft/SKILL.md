@@ -131,3 +131,4 @@ The key words "MUST", "MUST NOT", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", 
 - The skill MUST NOT modify or refactor existing code the user provides unless explicitly asked
 - The skill MUST NOT call any MCP tool
 - If the user requests a state-changing action (run the query, write a file, commit code), the skill MUST stop and obtain explicit user confirmation before proceeding
+- Generated artifacts are ActBlue work product destined for `actblue/*` repos or local use: the skill MUST NOT push them to any personal repository (`matthardardt/*`) or any destination outside the ActBlue ecosystem, and MUST NOT run `git push` to ANY remote without the user's express, confirmed permission in the current conversation
