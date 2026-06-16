@@ -29,6 +29,7 @@ metadata:
     writes:
       - filesystem:~/.claude/actblue-data-dictionary.md
       - filesystem:~/.claude/actblue-data-dictionary-sources
+      - filesystem:~/.claude/actblue-semantic-catalog
       - filesystem:~/Cowork/team-data-dictionary
     forbidden:
       - resource: any-mcp
@@ -117,10 +118,23 @@ Lane specs (the 2026-06-11 extracts in the sources dir are worked examples of th
    facts and the workbench AGENTS.md pointers, and note the plugin sync workflow (edit source →
    commit → STOP, push needs the user's express OK → sync installed copy by file copy).
 
-## Phase 3 — Regenerate the team edition
+## Phase 3 — Regenerate the derived artifacts
 
-Rebuild `~/Cowork/team-data-dictionary/ActBlue_Data_Dictionary_Team_Edition_v<N>.md` (+ `.docx`
-via the docx skill) from the updated dictionary:
+**3a — Semantic catalog** (`~/.claude/actblue-semantic-catalog/`, the structured projection the
+skills resolve from). Re-author the `_staging/` files that changed (`tables_core`, `tables_base`,
+`metrics`, `joins`, `dimensions` — same naming contract as `catalog.yaml`; spawn the same authoring
+subagents for a broad change, or hand-edit for a small delta), and update `conventions.yaml` /
+`glossary.yaml` directly. Then:
+```
+python3 ~/.claude/actblue-semantic-catalog/bin/build_catalog.py --write   # assemble + validate cross-refs (fails on any dangling metric→table / metric→filter / join→table / dimension→table)
+python3 ~/.claude/actblue-semantic-catalog/bin/export_metricflow.py       # regenerate the MetricFlow export
+```
+Never hand-edit the assembled `tables.yaml`. `catalog validate` MUST pass before you finish. Keep the
+catalog in lockstep with the prose dictionary — a `[validated]` dictionary fact the catalog
+contradicts means the CATALOG is wrong; fix it (don't downgrade the dictionary).
+
+**3b — Team edition**: rebuild `~/Cowork/team-data-dictionary/ActBlue_Data_Dictionary_Team_Edition_v<N>.md`
+(+ `.docx` via the docx skill, reusing the saved `md_to_docx.js`) from the updated dictionary:
 - Corporate format: document-control block (owner, version, date, classification "ActBlue Internal
   — Data Department"), golden rules, platform overview, table catalog, keys & counting, business
   glossary, metric definitions, conventions, domain notes, known issues, doc index, **numbered

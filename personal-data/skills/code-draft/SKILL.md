@@ -19,6 +19,7 @@ metadata:
       - filesystem:working-directory
       - filesystem:~/.claude/actblue-data-dictionary.md
       - filesystem:~/.claude/actblue-data-dictionary-sources
+      - filesystem:~/.claude/actblue-semantic-catalog
     writes: []
     forbidden:
       - resource: filesystem
@@ -40,9 +41,12 @@ identify the right language and tooling, and produce working code that follows A
 - **ETL**: Hightouch, Fivetran — describe transformations in SQL/dbt, don't generate ETL configs unless asked
 - **OLTP**: PostgreSQL/Rails — for data reads only, never write-path code
 - **Looker**: LookML views/explores — reference `~/looker-reporting-db` before answering Looker questions
-- **ActBlue semantics**: before writing warehouse-touching code, read `~/.claude/actblue-data-dictionary.md`
-  (table grains + joins, counting keys, ET timestamps, refund conventions, fees, known traps); deep
-  per-source extracts in `~/.claude/actblue-data-dictionary-sources/`
+- **ActBlue semantics**: before writing warehouse-touching code, resolve exact definitions from the
+  semantic catalog — `~/.claude/actblue-semantic-catalog/bin/catalog metric|table|join|filter|column <x>`
+  (structured). Metric SQL you emit MUST match `catalog metric <name>`, and required filters come from
+  `catalog filter <name>`. Read `~/.claude/actblue-data-dictionary.md` for narrative/nuance (grains,
+  counting keys, ET timestamps, refund conventions, fees, traps); deep extracts in
+  `~/.claude/actblue-data-dictionary-sources/`
 
 ## Workflow
 

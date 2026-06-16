@@ -18,6 +18,7 @@ metadata:
       - filesystem:working-directory
       - filesystem:~/analytics
       - filesystem:~/.claude/actblue-data-dictionary.md
+      - filesystem:~/.claude/actblue-semantic-catalog
       - warehouse:redshift-read-only
     writes:
       - filesystem:working-directory
@@ -89,7 +90,10 @@ volume trajectory) — `entity_finance_tiers`-style net-raised tiers are the sta
 - **Composition drift**: new-to-platform vs existing donors decomposed separately (the
   cannibalization suite's new-money decomposition is the template).
 - **Data traps**: legacy-vs-new-era gates (e.g. ACH `paid_at >= '2026-04-20'`), settled-only
-  tables, refund rules — pull from `~/.claude/actblue-data-dictionary.md`, don't re-derive.
+  tables, refund rules — resolve as named filter macros via
+  `~/.claude/actblue-semantic-catalog/bin/catalog filter <name>` (`legacy_ach_gate`, `real_donations`,
+  `published_refunds`, `exclude_internal_entities`, …) and read `~/.claude/actblue-data-dictionary.md`
+  for nuance; don't re-derive.
 
 ## Phase 3 — Power / MDE (always, even for observational designs)
 
@@ -106,8 +110,9 @@ Use `~/.venvs/abdata/bin/python` (scipy/numpy) with closed forms — no notebook
 ## Phase 4 — Deliverable
 
 Write `./experiment_design_<slug>_<yyyymmdd>.md` containing: question + decision; estimand
-in one sentence; identification choice + why; data spec (tables/filters grounded via
-`~/analytics` grep + `rs cols` — never invented); the validity checks as a numbered list,
+in one sentence; identification choice + why; data spec (outcome metric resolved via
+`catalog metric <name>`; tables/filters grounded via the semantic catalog + `~/analytics` grep +
+`rs cols` — never invented); the validity checks as a numbered list,
 each with its test query sketched; power/MDE numbers; analysis SQL/python skeleton;
 known limitations. Close in chat with the 5-line summary and offer to chain `/analyze`
 to execute the pre-period checks immediately.
@@ -121,7 +126,7 @@ The key words "MUST", "MUST NOT", "SHOULD", "MAY" are per RFC 2119.
 - Every validity check in Phase 2 MUST appear in the plan with a concrete test, or a stated
   reason it doesn't apply
 - A power/MDE statement MUST be included; "we'll see what's significant" is not a plan
-- All table/column references MUST be grounded in `~/analytics`, the live catalog, or the
-  data dictionary; warehouse access MUST go through the `rs` scripts, read-only
+- All table/column references MUST be grounded in the semantic catalog, `~/analytics`, the live
+  catalog, or the data dictionary; warehouse access MUST go through the `rs` scripts, read-only
 - The skill MUST ask at most ONE AskUserQuestion batch, then proceed on stated assumptions
 - Files MUST be written only inside the working directory

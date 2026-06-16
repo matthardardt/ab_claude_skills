@@ -21,6 +21,7 @@ metadata:
       - filesystem:~/looker-reporting-db
       - filesystem:~/.claude/actblue-data-dictionary.md
       - filesystem:~/.claude/actblue-data-dictionary-sources
+      - filesystem:~/.claude/actblue-semantic-catalog
       - warehouse:redshift-read-only
     writes:
       - filesystem:working-directory
@@ -75,11 +76,17 @@ do not ask again — state assumptions inline and keep moving. Stop only if genu
 
 Ground in the REAL schema before writing any SQL — never invent table or column names.
 
-- **Data dictionary FIRST**: read `~/.claude/actblue-data-dictionary.md` — hard query rules (ET
-  timestamps, canonical filters, counting keys), table grains + canonical joins, the two refund
-  conventions, official metric definitions, and known traps, all confidence-tagged. Deep per-source
-  extracts (incl. full column dictionaries for 30 core tables) live in
-  `~/.claude/actblue-data-dictionary-sources/` — grep them before burning live catalog probes.
+- **Semantic catalog FIRST** (structured, deterministic lookup): the `catalog` helper resolves the
+  exact definition of any metric/table/join/filter/term —
+  `~/.claude/actblue-semantic-catalog/bin/catalog metric <name>` (canonical expression + required
+  filter macros), `catalog table <key>` (grain/keys/columns/gotchas), `catalog filter <name>`,
+  `catalog join <a> <b>`, `catalog column <key>.<col>`, `catalog grep <regex>`. Any metric SQL you
+  write SHOULD match `catalog metric <name>`; pull required filters via `catalog filter`.
+- **Data dictionary** (the narrative behind the catalog): `~/.claude/actblue-data-dictionary.md` —
+  hard query rules, the two refund conventions, official metric definitions, nuance, and known traps,
+  all confidence-tagged. Deep per-source extracts (incl. column dictionaries for 30 core tables) in
+  `~/.claude/actblue-data-dictionary-sources/`. If the catalog lacks an object, grep these + the live
+  catalog and treat the gap as a catalog TODO — never silently invent schema.
 - **Repo conventions** (how the team actually queries the domain):
   ```bash
   cd ~/analytics && grep -rhioE '(from|join)[[:space:]]+[a-z0-9_."]+' --include='*.sql' . \

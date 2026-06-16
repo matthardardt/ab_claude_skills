@@ -14,6 +14,7 @@ metadata:
       - filesystem:~/analytics
       - filesystem:~/looker-reporting-db
       - filesystem:~/.claude/actblue-data-dictionary.md
+      - filesystem:~/.claude/actblue-semantic-catalog
       - warehouse:redshift-read-only
     writes: []
     forbidden:
@@ -41,7 +42,8 @@ You review analytics code with fresh eyes and return graded findings. You do not
    - Date boundaries inclusive vs exclusive; timezone of timestamp columns; partial-period leakage
    - Implicit INNER JOIN silently dropping rows; division-by-zero; window frame defaults
 3. **Redshift compliance pass**: `dateadd`/`datediff` positional units (no Postgres `interval`, no `now()`); `listagg ... within group` not `string_agg`; `json_extract_path_text` not `->`/`->>`; no `generate_series` joined to user tables; no `unnest`/LATERAL; `qualify` only when certain, else window-in-subquery. If the code is dbt, also check `ref()`/`source()`/config against project conventions.
-4. **ActBlue domain pass** — flag when the domain implies a rule the code omits (read `~/.claude/actblue-data-dictionary.md` for definitions when relevant):
+4. **ActBlue domain pass** — resolve what the code *claims* to compute against the semantic catalog (`~/.claude/actblue-semantic-catalog/bin/catalog metric|filter|table|join <x>`) and flag drift; read `~/.claude/actblue-data-dictionary.md` for nuance. Flag when the domain implies a rule the code omits:
+   - Catalog cross-check: a metric's SQL SHOULD match `catalog metric <name>` (e.g. contributions = `count(distinct contribution_sequence)`, not `contribution_id`); its filters SHOULD match `catalog filter <name>`; join keys SHOULD match `catalog join`. Unjustified divergence from a `validated` catalog definition is a Blocker.
    - Tips excluded (`is_tip = false`)? Internal tip entities 33605/26969 excluded where relevant?
    - Canonical real-donations filter present or its absence justified?
    - ACH analysis gated on `paid_at >= '2026-04-20'` (legacy-ACH trap)?
