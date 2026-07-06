@@ -3,8 +3,8 @@ name: exec-qa-prep
 description: >-
   Prepares data presenters for executive-level Q&A. Takes a data story, analytics output, or
   presentation summary and generates 10-15 likely leadership questions organized by executive
-  perspective (Financial/CFO, Strategic/CEO, Technical/CTO, Process/Risk) — each with a
-  data-grounded answer and confidence rating. Also surfaces "gotcha" questions on methodology,
+  perspective (Financial/CFO, Strategic/CEO, Technical/CTO, Scope & Process/Head of Data) — each
+  with a data-grounded answer and confidence rating. Also surfaces "gotcha" questions on methodology,
   data quality, and scope. Use when someone says: "prep me for this presentation", "what will
   leadership ask about this data", "create Q&A for this", "prepare for exec review", "anticipate
   executive questions", "what questions should I expect", "briefing prep", "help me prepare for
@@ -16,7 +16,9 @@ metadata:
   actblue_permissions:
     mcp_tools: []
     reads:
+      - filesystem:working-directory
       - filesystem:~/.claude/actblue-data-dictionary.md
+      - filesystem:~/.claude/analysis-registry.jsonl
     writes: []
     forbidden:
       - resource: any-mcp
@@ -59,10 +61,16 @@ you use?" is a guaranteed leadership question. Gap sources the presenter may not
 
 ## Workflow
 
-### Step 1: Read the Input
+### Step 1: Read the Input — from the artifacts, not the summary
 
-Take in the analytics output, insight brief, or presentation summary. If only a topic is provided
-without findings, ask for the key numbers and conclusions before proceeding.
+Take in the analytics output, insight brief, or presentation summary. **If an
+`analysis_<slug>_<date>/` folder exists in the working directory or the user references one,
+read its `analysis.md` (including the QA gate results and query inventory) before generating
+anything** — the methodology answers ("which refund convention?", "is the last period
+complete?") live there, not in a three-line chat summary. Check
+`~/.claude/analysis-registry.jsonl` for prior analyses on the same topic — "how does this
+reconcile with the last number we reported?" is a guaranteed question. If only a topic is
+provided without findings, ask for the key numbers and conclusions before proceeding.
 
 Identify:
 - The core claim(s) the data is making
@@ -81,7 +89,13 @@ Generate 10-15 questions total, organized by persona. Aim for:
 For each question, provide:
 - **Prepared answer**: what the presenter should say, grounded in the data. If the data doesn't support a clean answer, say so explicitly rather than winging it
 - **Confidence**: High (data clearly supports the answer), Medium (requires additional context), Low (needs research before presenting)
-- **Supporting evidence**: the specific number, finding, or data point to cite
+- **Supporting evidence**: the specific artifact location — finding #, `NN_*.sql` file, results
+  CSV column, or registry entry — not just "the brief"
+
+**Derived-figure rule:** any number this skill computes itself (e.g. lift × volume = dollar
+impact) was never executed or QA'd — label it "derived — verify before quoting" and cap it at
+Medium confidence. High confidence is reserved for numbers that exist verbatim in the input
+artifacts.
 
 ### Step 3: Flag Prep Gaps
 
@@ -97,13 +111,17 @@ data or analysis would close each gap.
 ### Financial / CFO Questions ([N])
 | # | Question | Prepared Answer | Confidence | Evidence |
 |---|---|---|---|---|
-| 1 | What is the total revenue impact of this change? | [$X based on Y% lift × Z volume] | High | Finding #2 from the insight brief |
+| 1 | What is the total revenue impact of this change? | [$X — derived: Y% lift × Z volume; verify before quoting] | Medium | Derived from Finding #2 (lift) and results_volume.csv (volume) — not an executed number |
 
 ### Strategic / CEO Questions ([N])
 | # | Question | Prepared Answer | Confidence | Evidence |
 |---|---|---|---|---|
 
 ### Technical / Methodology Questions ([N])
+| # | Question | Prepared Answer | Confidence | Evidence |
+|---|---|---|---|---|
+
+### Scope & Process / Head of Data Questions ([N])
 | # | Question | Prepared Answer | Confidence | Evidence |
 |---|---|---|---|---|
 
@@ -135,6 +153,10 @@ data or analysis would close each gap.
 The key words "MUST", "MUST NOT", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
 - This skill is read-only: the skill MUST NOT write files or call any MCP tool
+- When analysis artifacts exist (an `analysis_*` folder or user-referenced files), the skill
+  MUST read them before generating answers; every High-confidence answer MUST cite a specific
+  artifact location; skill-derived numbers MUST carry the "derived — verify before quoting"
+  label and MUST NOT be rated High
 - The skill MUST generate questions from all four executive perspectives in every invocation
 - The skill MUST include at least two Gotcha questions in every output
 - The skill MUST include the Prep Gaps section in every output, even if it is empty (in which case it MUST say "None — all anticipated questions are answerable from the current data")

@@ -34,21 +34,30 @@ When the question is about business MEANING (what a measure/dimension means, whi
 
 ## Workflow
 
-1. Parse the ask: locate-something, diagnose-visibility, or author-a-snippet.
-2. Ground first: grep the repo for the named fields/views/explores; read the surrounding LookML. Cite every claim as `path:line`.
-3. **Visibility diagnosis** (the recurring one) — run the checklist in order:
+1. **Clone freshness first (mandatory):** Read the LAST line of
+   `~/looker-reporting-db/.git/logs/HEAD` (the reflog — its second-to-last field is the epoch
+   timestamp of the last ref update; do NOT rely on file mtimes). Convert to a date and prefix
+   EVERY diagnosis with: "local clone last updated <date> — findings reflect the clone, not
+   origin; if your change merged after this, pull first." The clone is most likely stale in
+   exactly the headline scenario (user merged minutes ago and asks why the field is missing).
+2. Parse the ask: locate-something, diagnose-visibility, or author-a-snippet.
+3. Ground first: grep the repo for the named fields/views/explores; read the surrounding LookML. Cite every claim as `path:line`.
+4. **Visibility diagnosis** (the recurring one) — run the checklist in order:
+   0. Field absent from the clone AND the clone predates the user's reported merge → the
+      PRIMARY hypothesis is a stale clone, not a missing field. Say so and stop short of a
+      confident "not present" claim; ask the dispatcher to have the clone pulled.
    1. Is the field present in the view file? (If recently merged: merging to GitHub does NOT deploy — someone must run "Deploy from Production Branch" in the Looker IDE.)
    2. Is it `hidden: yes`?
    3. Is an explore-level `fields:` allowlist excluding it? (Known: the `customer_experience` model restricts `joined_entities_filtered_candidacies`; the `entity_analysis` explore has no allowlist.)
    4. All three pass → stale compiled-model cache: an admin runs **Admin → LookML Validator → Run Validator** (nuclear: Admin → Projects → Reset Files to Production). No redeploy needed.
-4. **Authoring rules**:
+5. **Authoring rules**:
    - Heavy logic or anything that must be GROUP BY-able → LookML dimension, not a table calc (calcs run post-SQL)
    - Expression syntax: `case()` has NO `else` (last positional arg is the fallback); `date(y,m,d)` is 3-arg only; `diff_days()`/`add_days()` not date arithmetic; `pivot_index(${m}, i)` never `${m}[Yes]`; `min()`/`max()` are column-wise — use `if()` for scalar compares
    - Merged Results need ≥1 shared dimension — constant `"Total"` custom dimension trick
    - Single Value viz breaks on pivoted results (∅) — un-pivot + conditional aggregation, or a filtered LookML measure; no reference lines; tooltips via "Edit tooltip content" with Liquid field tokens
    - New explore joins carry a `fields:` allowlist; business filters belong at the viz/filter level, not baked into calcs (user preference)
    - SQL inside `sql:` blocks is Redshift — positional `dateadd`/`datediff`, no Postgres operators
-5. Return: the answer, `path:line` citations, ready-to-paste snippet (matching style-guide conventions), and — whenever a change is involved — the deploy reminder (merge → Deploy from Production Branch → validator if the picker is stale).
+6. Return: the clone-freshness line, the answer, `path:line` citations, ready-to-paste snippet (matching style-guide conventions), and — whenever a change is involved — the deploy reminder (merge → Deploy from Production Branch → validator if the picker is stale).
 
 ## Constraints
 

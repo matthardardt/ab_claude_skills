@@ -17,13 +17,18 @@ metadata:
     mcp_tools: []
     reads:
       - filesystem:working-directory
+      - filesystem:~/analytics
+      - filesystem:~/looker-reporting-db
       - filesystem:~/.claude/actblue-data-dictionary.md
       - filesystem:~/.claude/actblue-data-dictionary-sources
       - filesystem:~/.claude/actblue-semantic-catalog
-    writes: []
+    writes:
+      - filesystem:working-directory
     forbidden:
-      - resource: filesystem
+      - resource: filesystem-outside-working-directory
         action: write
+      - resource: warehouse
+        action: any (drafting only — execution belongs to analyze)
       - resource: any-mcp
         action: any
 ---
@@ -64,7 +69,7 @@ If the requirement is clear enough, proceed without asking — avoid unnecessary
 
 | Requirement | Tool |
 |---|---|
-| One-off analysis, ad-hoc query | Redshift SQL |
+| Standalone read/analysis query | **STOP — hand off to `/analyze`** (it grounds in real schema and executes). Redshift SQL appears in this skill only embedded inside a Python/dbt artifact |
 | Recurring transformation, model | dbt model |
 | Statistical analysis, ML, visualization | Python |
 | Complex multi-step pipeline | Python + SQL combo |
@@ -134,10 +139,17 @@ Call out the validation result in a single line beneath the code block.
 
 The key words "MUST", "MUST NOT", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
-- This skill is read-only: the skill MUST NOT write files, create database objects, execute queries, or modify any external system
+- The skill MAY write requested artifact files inside the working directory (that IS the
+  deliverable); it MUST NOT write outside the working directory, execute queries or generated
+  code, create database objects, or modify any external system
+- Every table, column, and join key in emitted warehouse SQL MUST resolve from
+  `catalog table|column|join`, the dictionary-sources column extracts, or `~/analytics`; if
+  unresolvable, the skill MUST mark it `/* UNVERIFIED: confirm table/column */` and list it
+  under Assumptions — silently invented schema is not acceptable. On catalog-vs-dictionary
+  conflict, the dictionary's `[validated]` fact wins
 - The skill MUST validate all SQL against Redshift syntax rules before presenting and MUST call out the validation result in a single line beneath every SQL block
 - The skill MUST NOT truncate or abbreviate code output — if output approaches length limits, the skill MUST split it into numbered parts the user can assemble without modification
 - The skill MUST NOT modify or refactor existing code the user provides unless explicitly asked
 - The skill MUST NOT call any MCP tool
-- If the user requests a state-changing action (run the query, write a file, commit code), the skill MUST stop and obtain explicit user confirmation before proceeding
+- If the user requests running generated code, executing a query, or committing, the skill MUST stop and obtain explicit user confirmation before proceeding
 - Generated artifacts are ActBlue work product destined for `actblue/*` repos or local use: the skill MUST NOT push them to any personal repository (`matthardardt/*`) or any destination outside the ActBlue ecosystem, and MUST NOT run `git push` to ANY remote without the user's express, confirmed permission in the current conversation

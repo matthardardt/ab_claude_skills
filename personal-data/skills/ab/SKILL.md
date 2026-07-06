@@ -6,7 +6,7 @@ description: >-
   version of the task-to-tool reference card. PRIMARILY slash-invoked: trigger when the user
   types "/ab <anything>", or asks "which skill/tool should handle this", "route this", or
   "what's the right workflow for X". Do NOT auto-trigger on ordinary data questions, Looker
-  questions, or code asks — those route directly via the global skill-routing rules; this
+  questions, or code asks — those route directly via each skill's own description; this
   skill exists for when the user explicitly wants the router to decide.
 metadata:
   actblue_permissions:
@@ -17,7 +17,7 @@ metadata:
     writes: []
     forbidden:
       - resource: warehouse
-        action: write
+        action: any
       - resource: filesystem-outside-working-directory
         action: write
 ---
@@ -29,57 +29,71 @@ You are a dispatcher, not a doer. Read the ask, pick the route, announce it in O
 The handoff carries the user's ORIGINAL wording (plus any session context that changes the
 route) — never a paraphrase that drops constraints.
 
-## Routing table (first match wins; scan top to bottom)
+## How to classify
 
-| If the ask is... | Route to |
+**Per-skill descriptions are canonical.** Match the ask against the session's live
+available-skills list first — the descriptions carry disciplined Do-NOT boundaries and
+resolve most asks by themselves. Before announcing any route, verify the destination
+actually appears in the session's available skills or agents; if it doesn't, say so and
+offer the closest inline alternative.
+
+The table below holds ONLY what native description-matching cannot express: agent dispatch
+(agents never auto-trigger), tie-breaks between overlapping skills, chains, and known
+no-skill zones. It is not a mirror of the skill catalog — do not add rows that merely
+restate a skill's own description.
+
+## Router-exclusive routes and tie-breaks (most specific wins)
+
+| If the ask... | Route to |
 |---|---|
-| A warehouse data question, pull, trend, "how many/much", segment comparison | Skill `personal-data:analyze` (the default for anything data-shaped) |
-| 2+ independent, fully-specified pulls, or "do this in the background" | Dispatch `warehouse-analyst` agent(s) via the Agent tool, one per question, in parallel |
-| Causal: "did X work", impact of a rollout, cannibalization, A/B design, power/sample size | Skill `personal-data:experiment-design` (chain `/analyze` after, for execution) |
-| Write SQL/Python/dbt code WITHOUT running an analysis | Skill `personal-data:code-draft` |
-| Review code/SQL/LookML I wrote or am about to merge | Skill `personal-data:data-code-review`; for fresh-eyes pre-merge review of work authored in THIS session, dispatch the `data-code-reviewer` agent instead |
-| Looker/LookML: find a field, "why isn't this showing", draft a dimension/measure | Dispatch `lookml-grounder` agent; inline LookML-ops checklist (global CLAUDE.md) for quick diagnosis |
-| Stand up an alert or recurring monitor on a metric | Looker-alert pattern in `~/ACH Dashboard Analytics/ach_cost_model/MONITORING.md`; local backstop via `anthropic-skills:schedule` |
-| Profile/explore an unfamiliar table | Inline `rs cols` / `rs peek` + the column dictionaries in `~/.claude/actblue-data-dictionary-sources/`; `warehouse-analyst` if it's a multi-table sweep |
-| Statistical methodology with no warehouse pull (tests, distributions, interpretation) | Skill `data:statistical-analysis` |
-| QA/validate a finished analysis before sharing | Skill `data:validate-data` (methodology) or `data-code-review` (the code) |
-| Prep for leadership/exec questions on an analysis | Skill `personal-data:exec-qa-prep` (chained after analyze when both are wanted) |
-| Produce a deck / Word doc / spreadsheet / PDF | `anthropic-skills:pptx` / `docx` / `xlsx` / `pdf` |
-| Schedule something recurring or a future reminder | Skill `anthropic-skills:schedule` |
-| Inbox/email triage, Rippling approvals | Skill `actblue-productivity:email-briefing` |
-| Confluence/Jira/GitHub daily catch-up | Skill `actblue-productivity:confluence-digest` |
-| Create or update a Jira ticket | `actblue-productivity:jira-issue-create` / `jira-issue-update` |
-| Quarterly goals / OKRs | Skill `write-okrs` |
-| Indigo/Atlas local dev problems, git/PR conventions | `actblue-engineering:*` (indigo-local-debug, atlas-local-debug, git-standards) |
-| Deep multi-source web research on a topic | Skill `deep-research` |
-| Build a new skill/agent/hook | `actblue-skill-construction:component-author` (marketplace-conformant) or `anthropic-skills:skill-creator` |
-| Anomaly-model or ACH-workbench project work | No skill — work directly under that workbench's `AGENTS.md` context; route sub-tasks (pulls, reviews) through the rows above |
+| Contains a causal claim — "did X work", impact of a rollout/change, cannibalization, A/B test, "is this effect real or selection" | Skill `personal-data:experiment-design` FIRST (design + validity checks), chain `/analyze` to execute. Causal beats descriptive: this row outranks any data-pull reading of the same ask |
+| Is 2+ independent, FULLY-specified pulls (time range, population, grain all pinned), or says "in the background" | Dispatch `warehouse-analyst` agent(s) via the Agent tool, one per question, in parallel. If a load-bearing parameter is missing, the agent returns STATUS: UNDERSPECIFIED — relay its question to the user, then re-dispatch |
+| Asks to independently verify/QA a headline number or finished analysis | `data-code-review` for the code + `warehouse-analyst` in **verify mode** for the numbers (pass question + claimed number, NOT the original SQL — see the agent's verify-mode contract) |
+| Is a review of code authored in THIS session | Dispatch the `data-code-reviewer` agent (fresh eyes, unanchored); reviews of code from elsewhere go to the `data-code-review` skill by its own description |
+| Is Looker/LookML research: find a field, "why isn't this showing", draft a dimension/measure | Dispatch `lookml-grounder` agent (checks clone freshness first); it returns snippets — the user applies and deploys them |
+| Is a cross-system "what's on my plate / catch me up" briefing | Skill `personal-productivity:command-center` (supersedes `email-briefing`, which is email-ONLY) |
+| Mentions refreshing the data dictionary or asks if it is stale | Skill `personal-data:dictionary-refresh` — confirm with the user before it dispatches the 7-agent crawl (it is expensive) |
+| Is statistical methodology with NO warehouse pull (test choice, distributions, interpretation) | No installed skill owns this — handle inline, grounded in `~/.claude/actblue-data-dictionary.md` and the semantic catalog. If it is really test-selection/power for a study, that is the causal row above |
+| Wants a recurring monitor or alert on a metric | Skill `anthropic-skills:schedule` for a local job; if it should live in Looker, route the dashboard/alert work to `lookml-grounder` for grounding first |
+| Wants to profile/explore an unfamiliar table | Route to `/analyze` (its Phase 1 discovery) or dispatch `warehouse-analyst` for a multi-table sweep. The router itself NEVER runs warehouse queries |
+| Is anomaly-model or ACH-workbench project work | No skill — work under that workbench's `AGENTS.md` context; route sub-tasks (pulls, reviews) through the rows above |
+| Is anything else data-shaped (pull, trend, "how many/much", segment comparison, "write a query") with no causal claim | Skill `personal-data:analyze` — the explicit FALLBACK row, deliberately last |
+
+Everything else — docs/decks/spreadsheets, email/Jira/Confluence, OKRs, engineering setup,
+web research, skill authoring — routes by native skill descriptions; announce and invoke.
 
 ## Rules of the road
 
 1. **One hop, announced.** Classify, say the route and why in one line, invoke. No meta-essay.
-2. **Ambiguity costs one question, max.** If two routes genuinely differ in outcome (e.g.
-   analyze-now vs design-the-experiment-first), ask ONE AskUserQuestion with the options and a
-   recommended default. Never more.
+2. **Ambiguity costs one question, max — and only when the ROUTE differs.** If two routes
+   genuinely differ in outcome (e.g. analyze-now vs design-the-experiment-first), ask ONE
+   AskUserQuestion with a recommended default. Never ask about details the destination skill
+   will clarify itself (analyze runs its own question batch — don't pre-empt it).
 3. **Multi-part asks get a plan line, then sequenced handoffs.** "Pull X, then prep me for the
-   CFO" → `/analyze` first, `/exec-qa-prep` chained on its output. Independent parts → parallel
-   agents; dependent parts → in order.
+   CFO" → announce the chain (`/analyze` → `/exec-qa-prep`), invoke step 1; when it completes,
+   the session initiates the next announced step. Independent parts → parallel agents;
+   dependent parts → in order. The plan line IS the chain's memory — restate it at each step.
 4. **Args carry the verbatim ask** plus only the context needed to act (file paths, time ranges
    already stated, the workbench in play).
-5. **Defaults when nothing matches:** data-shaped → `analyze`; otherwise say no tool fits and
+5. **Never force a route.** If nothing fits and it isn't data-shaped, say no tool fits and
    handle it directly — a wrong route is worse than no route.
-6. **Never re-invoke a skill that is already running**, and never route a second hop (the
-   destination skill owns the work from there).
+6. **The destination owns its task.** Never re-route or second-guess a skill mid-task; the
+   router's job ends at the announced handoff (per step, for chains).
 
 ## Constraints
 
 The key words "MUST", "MUST NOT", "SHOULD", "MAY" are per RFC 2119.
 
-- The router MUST NOT do the destination's work itself (no SQL, no LookML, no analysis in-router)
-  beyond the classification — its output is a routing decision plus the handoff
+- The router MUST NOT do the destination's work itself — no SQL, no warehouse access (not
+  even `rs cols`/`rs peek`), no LookML, no analysis in-router; its output is a routing
+  decision plus the handoff
 - The router MUST pass the user's original wording in the handoff args and MUST NOT silently
   narrow or reinterpret the ask
+- The router MUST verify the destination exists in the session before announcing it; if
+  unavailable (skill not installed, agent not registered), it MUST say so and offer the
+  closest inline alternative
 - The router MUST respect the global git/sharing policy and warehouse read-only rules — routing
   MUST NOT be used to launder an action the destination would refuse
-- If the right destination is unavailable in the session (skill not installed, agent not
-  registered yet), the router MUST say so and offer the closest inline alternative
+- Repo invariant (for maintainers): adding a skill or agent to this plugin REQUIRES checking
+  whether this table needs a tie-break or dispatch row — native-triggerable skills do NOT get
+  mirror rows

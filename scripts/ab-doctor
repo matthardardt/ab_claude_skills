@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""ab-doctor — health check + self-repair for the personal-claude-skills plugin install.
+
+Designed to run as a SessionStart hook (fast, silent when healthy, always exit 0).
+Run `ab-doctor --verbose` by hand for a full report.
+
+Checks:
+  1. Every plugin recorded in ~/.claude/plugins/installed_plugins.json has a live
+     installPath containing .claude-plugin/plugin.json. If the versioned cache dir
+     was wiped (known failure, first hit 2026-06-29), repairs it by copying from
+     the marketplace clone and prints a loud RESTART warning (skills load at startup).
+  2. The marketplace clone's git HEAD matches the recorded gitCommitSha (drift warning
+     only — never auto-syncs git state).
+  3. ~/.claude/bin/rs and sql_guard.py exist (warehouse access path).
+  4. The knowledge layer (data dictionary + semantic catalog) exists.
+"""
+
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+HOME = Path.home()
+PLUGINS = HOME / ".claude" / "plugins"
+CLONE = PLUGINS / "marketplaces" / "personal-claude-skills"
+VERBOSE = "--verbose" in sys.argv
+
+issues, notes = [], []
+
+
+def say(msg):
+    if VERBOSE:
+        print(msg)
+
+
+def main():
+    # 1. cache integrity + repair
+    reg_path = PLUGINS / "installed_plugins.json"
+    if not reg_path.exists():
+        issues.append(f"missing {reg_path} — plugins are not registered at all")
+    else:
+        reg = json.loads(reg_path.read_text())
+        for key, entries in reg.get("plugins", {}).items():
+            plugin_name = key.split("@")[0]
+            for entry in entries:
+                install = Path(entry["installPath"])
+                if (install / ".claude-plugin" / "plugin.json").exists():
+                    say(f"ok: {key} at {install}")
+                    continue
+                src = CLONE / plugin_name
+                if not (src / ".claude-plugin" / "plugin.json").exists():
+                    issues.append(f"{key}: cache missing at {install} and no source at {src} — manual repair needed")
+                    continue
+                install.parent.mkdir(parents=True, exist_ok=True)
+                if install.exists():
+                    shutil.rmtree(install)
+                shutil.copytree(src, install)
+                issues.append(
+                    f"{key}: cache was missing — REPAIRED from {src}. "
+                    f"RESTART Claude Code: skills load at startup, this session does not have them."
+                )
+
+    # 2. clone vs recorded sha (drift note only)
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(CLONE), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+        if reg_path.exists() and head:
+            shas = {e.get("gitCommitSha") for v in reg.get("plugins", {}).values() for e in v}
+            shas.discard(None)
+            if shas and head not in shas:
+                notes.append(
+                    f"marketplace clone HEAD ({head[:8]}) != recorded install sha "
+                    f"({', '.join(s[:8] for s in shas)}) — cache may be newer/older than the clone; "
+                    f"re-register or rebuild the cache when convenient"
+                )
+    except Exception:
+        pass
+
+    # 3. runtime scripts
+    for f in ("rs", "sql_guard.py", "rs_query.py"):
+        if not (HOME / ".claude" / "bin" / f).exists():
+            issues.append(f"~/.claude/bin/{f} missing — run setup_env.sh from the plugin's analyze/scripts dir")
+            break
+
+    # 4. knowledge layer
+    for p in ("actblue-data-dictionary.md", "actblue-semantic-catalog"):
+        if not (HOME / ".claude" / p).exists():
+            issues.append(f"~/.claude/{p} missing — knowledge layer broken; restore from the ~/.claude git history")
+
+    for n in notes:
+        print(f"ab-doctor note: {n}")
+    for i in issues:
+        print(f"ab-doctor: {i}")
+    if VERBOSE and not issues and not notes:
+        print("ab-doctor: all healthy")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:  # a broken doctor must never break session start
+        print(f"ab-doctor: internal error ({e}) — run with --verbose to debug")
+    sys.exit(0)

@@ -9,8 +9,8 @@ description: >-
   experiment", "measure the impact of <feature/change>", "is X cannibalizing Y", "did X cause Y",
   "A/B test", "diff-in-diff", "power analysis", "how big a sample do we need", "is this effect
   real or selection". Do NOT use for descriptive pulls or trend questions with no causal claim
-  (use analyze), for explaining statistical concepts (use data:statistical-analysis), or for
-  reviewing finished analysis code (use data-code-review).
+  (use analyze), for explaining statistical concepts with no study attached (answer inline —
+  no skill owns that), or for reviewing finished analysis code (use data-code-review).
 metadata:
   actblue_permissions:
     mcp_tools: []
@@ -64,10 +64,22 @@ autonomously; state assumptions inline.
 Pick the FIRST that fits, and say why the simpler ones below it don't:
 
 1. **Randomized assignment exists** (rare — product experiment with a real control):
-   straight comparison of means + CUPED-style pre-period adjustment for variance reduction.
-2. **Staggered adoption** (the ActBlue default): two-way fixed-effects diff-in-diff or an
-   event study around each unit's adoption date. Use never-treated or not-yet-treated units
-   as controls; with staggered timing, prefer event-time stacking over a single pooled 2x2.
+   comparison of means + CUPED-style pre-period adjustment — but ONLY after the
+   randomization-integrity checks in Phase 2 pass. "A real control" is a claim to verify,
+   not an assumption: ActBlue A/B arms have run for DIFFERENT durations
+   (`system_ab_tests_unnested`), and naive pooling let seasonality masquerade as a treatment
+   effect (validated incident: recurring-checkbox test, naive +0.423pp → corrected +0.304pp,
+   2026-06). Restrict every arm to the common assignment window before comparing anything.
+2. **Staggered adoption** (the ActBlue default): **stacked event-study is the default
+   estimator** — build a clean 2x2 per adoption cohort (treated cohort vs not-yet/never-treated
+   in a fixed event window), stack, estimate with cohort×window fixed effects.
+   Pooled static TWFE is acceptable ONLY with an explicit one-line homogeneity justification:
+   with staggered timing and effects that grow post-adoption (the normal rollout shape),
+   TWFE uses early adopters as controls for late ones and its negative weights can attenuate
+   or sign-flip the estimate (Goodman-Bacon). Callaway–Sant'Anna / Sun–Abraham are the named
+   alternatives if estimator packages are wanted; stacked OLS runs on the abdata venv
+   (statsmodels is installed). State the estimand honestly: this identifies the **ATT for
+   adopter cohorts**, not a platform-wide effect — the Phase 4 estimand sentence must say so.
 3. **Single cutover date, everyone treated** (policy/fee change): interrupted time series
    against the entity's own seasonal baseline, ideally with a placebo series that the change
    could not have affected.
@@ -79,6 +91,18 @@ volume trajectory) — `entity_finance_tiers`-style net-raised tiers are the sta
 
 ## Phase 2 — Design-validity checks (the plan MUST name each, with a query to test it)
 
+- **Randomization integrity** (setting 1, mandatory before any comparison of means):
+  (a) *Arm contemporaneity* — compute each arm's assignment window from sequence-0 `paid_at`
+  (NOT `contribution_tag_updated_at`, whose churn makes tests look active through today) and
+  restrict ALL arms to the common window `[max(arm starts), min(arm ends)]`;
+  (b) *Sample-ratio mismatch* — chi-square the observed arm counts against the designed
+  allocation; a significant SRM means broken assignment, stop and investigate before any
+  effect estimate. Both have one-query tests — sketch them in the plan.
+- **Inference spec** (settings 1-3, mandatory): name the clustering level and it must match
+  the assignment level — entity-level treatment means entity-clustered SEs; a daily panel
+  over months has serially correlated outcomes, and unclustered SEs will produce p<0.001 on
+  noise (Bertrand–Duflo–Mullainathan). With a handful of treated clusters, say plainly that
+  clustered asymptotics fail (wild-cluster bootstrap or aggregate to one pre/post obs per unit).
 - **Parallel trends**: plot/compare treated vs control outcome trends for ≥8 pre-periods;
   an event-study plot with flat pre-coefficients is the standard exhibit.
 - **Selection into treatment**: compare treated vs control on pre-period levels AND growth;
@@ -106,6 +130,9 @@ Use `~/.venvs/abdata/bin/python` (scipy/numpy) with closed forms — no notebook
 - For DiD: power on the pre-period residual variance of the unit-level outcome, not the raw
   variance — report the MDE at the actual sample size and say plainly if the question is
   underpowered (small-N rollouts usually are; recommend the wait-time to adequate power).
+- **Ground the inputs**: baseline rates, variances, and unit counts SHOULD come from a quick
+  real pull (`~/.claude/bin/rs`) rather than round-number guesses; state the source of every
+  power input in the plan.
 
 ## Phase 4 — Deliverable
 
@@ -123,6 +150,9 @@ The key words "MUST", "MUST NOT", "SHOULD", "MAY" are per RFC 2119.
 
 - The skill MUST classify the identification setting explicitly and MUST refuse to dress up
   setting 4 (no variation) as a causal estimate — bounding or holdout proposals only
+- For setting 1, the plan MUST include the randomization-integrity checks (arm common window
+  from sequence-0 paid_at + SRM test) BEFORE any comparison of means; for settings 1-3 the
+  plan MUST carry an explicit inference spec (clustering level matched to assignment level)
 - Every validity check in Phase 2 MUST appear in the plan with a concrete test, or a stated
   reason it doesn't apply
 - A power/MDE statement MUST be included; "we'll see what's significant" is not a plan

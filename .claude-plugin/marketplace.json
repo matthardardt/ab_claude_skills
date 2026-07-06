@@ -5,15 +5,15 @@
     "name": "matthardardt"
   },
   "metadata": {
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Personal Claude Code skills for Matthew Hardardt — data engineering, analytics, code review, exec presentation prep, and daily command center. Not for shared distribution."
   },
   "plugins": [
     {
       "name": "personal-data",
       "source": "./personal-data",
-      "description": "Data science and analytics skills for the ActBlue data team. End-to-end warehouse analysis with live read-only Redshift execution (analyze), code artifact generation (code-draft), harsh-but-fair code review (data-code-review), and executive presentation Q&A prep (exec-qa-prep). Covers Redshift SQL, Python, and dbt workflows.",
-      "version": "0.5.0"
+      "description": "Data science and analytics toolkit for the ActBlue data team. Front-door router (ab), end-to-end warehouse analysis with live read-only Redshift execution and QA gates (analyze), causal design + power (experiment-design), code artifact generation (code-draft), rubric-based code review (data-code-review + fresh-context data-code-reviewer agent), executive Q&A prep (exec-qa-prep), quarterly staged dictionary refresh (dictionary-refresh), and dispatchable agents (warehouse-analyst incl. verify mode, lookml-grounder). Covers Redshift SQL, Python, dbt, and LookML workflows.",
+      "version": "0.6.0"
     },
     {
       "name": "personal-productivity",

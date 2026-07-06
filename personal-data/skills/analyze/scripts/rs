@@ -2,24 +2,35 @@
 # rs — read-only Redshift access for the personal-data:analyze skill.
 #
 # Enforces: SELECT-only statements, single statement per call, statement timeout,
-# row cap on table output. Credentials come from REDSHIFT_* env vars, falling back
-# to the `export REDSHIFT_*` lines in ~/.zshrc.
+# row cap on table output, output-path containment for csv. Validation is
+# delegated to sql_guard.py (single shared validator, same one rs_query.py uses —
+# golden corpus in tests/test_sql_guard.py). Credentials come from REDSHIFT_* env
+# vars, falling back to the `export REDSHIFT_*` lines in ~/.zshrc.
 #
 # Usage:
-#   rs sql  "<query>"              run query, aligned table output (LIMIT 500 appended if absent)
-#   rs csv  "<query>" <out.csv>    run query, full results to CSV (no row cap)
-#   rs find <pattern>              search table/view names across schemas
-#   rs cols <schema.table>         list columns and types
-#   rs peek <schema.table>         first 10 rows
-#   rs explain "<query>"           query plan without executing
-#   rs check "<query>"             validate read-only rules only, no connection
-#   rs ping                        connectivity test (select 1)
+#   rs sql  "<query>"                       run query, aligned table output (LIMIT appended if absent; RS_ROW_CAP, default 500)
+#   rs csv  "<query>" <out.csv> [--force]   run query, full results to CSV (path must be inside CWD; --force to overwrite)
+#   rs find <pattern>                       search table/view names across schemas
+#   rs cols <schema.table>                  list columns and types (2-part name; drop any leading database qualifier)
+#   rs peek <schema.table>                  first 10 rows
+#   rs explain "<query>"                    query plan without executing
+#   rs check "<query>"                      validate read-only rules only, no connection
+#   rs ping                                 connectivity test (select 1)
+#   rs version                              print script version + checksums
+#
+# Exit codes: 2 = blocked by validation / bad arguments, 3 = connection failure
+# (usually AB VPN off), 4 = query failed server-side (SQL error, timeout, perms).
 set -euo pipefail
 
+RS_VERSION="1.1.0"
 TIMEOUT_MS="${RS_TIMEOUT_MS:-300000}"   # 5 min default statement timeout
 ROW_CAP="${RS_ROW_CAP:-500}"            # row cap for `rs sql` table output
+HERE="$(cd "$(dirname "$0")" && pwd -P)"
+GUARD="$HERE/sql_guard.py"
 
-die() { echo "rs: $*" >&2; exit 2; }
+die() { echo "rs: $*" >&2; exit "${2:-2}"; }
+
+[ -f "$GUARD" ] || die "sql_guard.py not found next to rs ($GUARD) — reinstall with setup_env.sh"
 
 load_creds() {
     if [ -z "${REDSHIFT_HOST:-}" ] || [ -z "${REDSHIFT_PASSWORD:-}" ]; then
@@ -33,51 +44,48 @@ load_creds() {
     [ -n "${REDSHIFT_PASSWORD:-}" ] || die "REDSHIFT_PASSWORD not set"
 }
 
-# Strip string literals and SQL comments so keyword checks can't be fooled or
-# false-positived by literals like where action = 'delete'.
-normalize() {
-    printf '%s' "$1" \
-        | sed -E "s/'[^']*'/''/g" \
-        | sed -E 's/--[^\r\n]*//g' \
-        | sed -E 's:/\*[^*]*\*+([^/*][^*]*\*+)*/: :g' \
-        | tr '[:upper:]' '[:lower:]'
+validate_readonly() {
+    printf '%s' "$1" | python3 "$GUARD" check || exit 2
 }
 
-validate_readonly() {
-    local raw="$1" norm first
-    norm=$(normalize "$raw")
-
-    first=$(printf '%s' "$norm" | grep -oE '[a-z_]+' | head -1)
-    case "$first" in
-        select|with|explain|show) ;;
-        *) die "blocked — statement must start with SELECT/WITH/EXPLAIN/SHOW (got: ${first:-empty})" ;;
-    esac
-
-    if printf '%s' "$norm" | grep -qwE 'insert|update|delete|drop|create|alter|truncate|grant|revoke|copy|unload|merge|call|vacuum|into|set|begin|commit|rollback|lock|comment'; then
-        die "blocked — write/DDL keyword detected (read-only access only)"
-    fi
-
-    # Single statement: reject any semicolon that isn't trailing.
-    if printf '%s' "$norm" | sed -E 's/;[[:space:]]*$//' | grep -q ';'; then
-        die "blocked — multiple statements not allowed"
-    fi
+# True (exit 0) if a terminal LIMIT should be appended.
+wants_limit() {
+    printf '%s' "$1" | python3 "$GUARD" needs-limit
 }
 
 run_psql() {
     # $1 = query, remaining args passed through to psql (e.g. --csv, -t)
     local query="$1"; shift
+    local errfile rc
+    errfile="$(mktemp)"
+    set +e
     PGPASSWORD="$REDSHIFT_PASSWORD" PGCONNECT_TIMEOUT=10 psql \
         -h "$REDSHIFT_HOST" -p "$REDSHIFT_PORT" -U "$REDSHIFT_USERNAME" -d "$REDSHIFT_DB" \
         -X -q -v ON_ERROR_STOP=1 \
         -c "set statement_timeout to ${TIMEOUT_MS}" \
-        -c "$query" "$@" \
-        || die "query failed — if this was a connection timeout, check that you are on the AB VPN"
+        -c "$query" "$@" 2>"$errfile"
+    rc=$?
+    set -e
+    if [ $rc -ne 0 ]; then
+        cat "$errfile" >&2
+        if grep -qiE 'could not connect|connection refused|timeout expired|no route to host|could not translate host name|operation timed out' "$errfile"; then
+            rm -f "$errfile"
+            die "connection failed — check that you are on the AB VPN" 3
+        fi
+        rm -f "$errfile"
+        die "query failed — server-side error above (SQL error, statement timeout, or permissions; NOT a VPN issue)" 4
+    fi
+    rm -f "$errfile"
 }
 
-MODE="${1:-}"; [ -n "$MODE" ] || die "usage: rs {sql|csv|find|cols|peek|explain|check|ping} ..."
+MODE="${1:-}"; [ -n "$MODE" ] || die "usage: rs {sql|csv|find|cols|peek|explain|check|ping|version} ..."
 shift
 
 case "$MODE" in
+    version)
+        echo "rs ${RS_VERSION}  ($HERE)"
+        shasum "$HERE/rs" "$GUARD" 2>/dev/null || true
+        ;;
     check)
         Q="${1:?usage: rs check \"<query>\"}"
         validate_readonly "$Q"
@@ -91,23 +99,46 @@ case "$MODE" in
         Q="${1:?usage: rs sql \"<query>\"}"
         validate_readonly "$Q"
         load_creds
-        if ! normalize "$Q" | grep -qwE 'limit'; then
-            Q="$(printf '%s' "$Q" | sed -E 's/;[[:space:]]*$//') limit ${ROW_CAP}"
+        if wants_limit "$Q"; then
+            # own line, so a trailing `-- comment` can never swallow the cap
+            Q="$(printf '%s' "$Q" | sed -E 's/;[[:space:]]*$//')"$'\n'"limit ${ROW_CAP}"
         fi
         run_psql "$Q"
         ;;
     csv)
-        Q="${1:?usage: rs csv \"<query>\" <out.csv>}"
-        OUT="${2:?usage: rs csv \"<query>\" <out.csv>}"
+        Q="${1:?usage: rs csv \"<query>\" <out.csv> [--force]}"
+        OUT="${2:?usage: rs csv \"<query>\" <out.csv> [--force]}"
+        FORCE="${3:-}"
         validate_readonly "$Q"
+        case "$OUT" in
+            *.csv) ;;
+            *) die "output path must end in .csv (got: $OUT)" ;;
+        esac
+        OUTDIR="$(dirname -- "$OUT")"
+        [ -d "$OUTDIR" ] || die "output directory does not exist: $OUTDIR"
+        OUTDIR_ABS="$(cd "$OUTDIR" && pwd -P)"
+        case "$OUTDIR_ABS/" in
+            "$(pwd -P)"/*|"$(pwd -P)/") ;;
+            *) die "output path must be inside the current working directory (got: $OUTDIR_ABS)" ;;
+        esac
+        if { [ -e "$OUT" ] || [ -L "$OUT" ]; } && [ "$FORCE" != "--force" ]; then
+            die "refusing to overwrite existing $OUT (pass --force to overwrite)"
+        fi
         load_creds
-        run_psql "$Q" --csv > "$OUT"
-        echo "rs: wrote $(($(wc -l < "$OUT") - 1)) rows to $OUT"
+        TMP="$(mktemp "$OUTDIR_ABS/.rs_csv.XXXXXX")"
+        trap 'rm -f "$TMP"' EXIT
+        run_psql "$Q" --csv > "$TMP"
+        mv -f "$TMP" "$OUT"
+        trap - EXIT
+        ROWS="$(python3 -c 'import csv,sys;print(max(sum(1 for _ in csv.reader(open(sys.argv[1]))) - 1, 0))' "$OUT")"
+        echo "rs: wrote ${ROWS} rows to $OUT"
         ;;
     explain)
         Q="${1:?usage: rs explain \"<query>\"}"
         validate_readonly "$Q"
         load_creds
+        # strip a leading EXPLAIN so `rs explain "explain select..."` doesn't double up
+        Q="$(printf '%s' "$Q" | sed -E 's/^[[:space:]]*[Ee][Xx][Pp][Ll][Aa][Ii][Nn][[:space:]]+//')"
         run_psql "explain $(printf '%s' "$Q" | sed -E 's/;[[:space:]]*$//')"
         ;;
     find)
@@ -118,19 +149,23 @@ case "$MODE" in
         ;;
     cols)
         T="${1:?usage: rs cols <schema.table>}"
-        case "$T" in *\'*) die "invalid table name" ;; esac
+        T="$(printf '%s' "$T" | tr '[:upper:]' '[:lower:]')"
+        case "$T" in
+            *.*.*) die "3-part names not supported — use schema.table (drop the leading database/catalog qualifier)" ;;
+        esac
+        printf '%s' "$T" | grep -qE '^[a-z0-9_]+\.[a-z0-9_]+$' || die "invalid table name (expected schema.table)"
         SCHEMA="${T%%.*}"; TABLE="${T#*.}"
-        [ "$SCHEMA" != "$TABLE" ] || die "table must be schema-qualified: schema.table"
         load_creds
         run_psql "select column_name, data_type, is_nullable from svv_columns where table_schema = '${SCHEMA}' and table_name = '${TABLE}' order by ordinal_position"
         ;;
     peek)
         T="${1:?usage: rs peek <schema.table>}"
+        T="$(printf '%s' "$T" | tr '[:upper:]' '[:lower:]')"
         printf '%s' "$T" | grep -qE '^[a-z0-9_]+\.[a-z0-9_]+$' || die "invalid table name (expected schema.table)"
         load_creds
         run_psql "select * from ${T} limit 10"
         ;;
     *)
-        die "unknown mode: $MODE (expected sql|csv|find|cols|peek|explain|check|ping)"
+        die "unknown mode: $MODE (expected sql|csv|find|cols|peek|explain|check|ping|version)"
         ;;
 esac
