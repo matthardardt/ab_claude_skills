@@ -121,19 +121,22 @@ Lane specs (the 2026-06-11 extracts in the sources dir are worked examples of th
 
 1. Read all seven agent summaries (and spot-read extracts where a summary flags something big).
    Surface any SUSPECTED-INJECTION flags to the user immediately.
-2. Compose the merged edition at `~/.claude/actblue-data-dictionary.pending.md`, show the user a
+2. Empirically re-verify any fact a lane contradicted IF one cheap metadata query settles it
+   (the 2026-06-11 timezone probe — executed_at vs getdate() lag — is the model). Do this BEFORE
+   staging so the settled result is baked into the diff the user approves, not discovered after.
+3. Compose the merged edition at `~/.claude/actblue-data-dictionary.pending.md`, show the user a
    unified diff vs the canonical file (or a tight summary of adds/changes/conflicts for a big
    refresh), and WAIT for approval. Only after an explicit yes: move it over the canonical path.
    The canonical dictionary, the semantic catalog (Phase 3a), and the team edition (3b) all
-   derive from this one approved gate. Merge rules:
+   derive from this one approved gate. If a fact settles only after the user has approved a diff,
+   it re-enters as a second staged diff — the canonical file never changes outside the gate.
+   Merge rules:
    - **[validated] facts are never silently overwritten.** A contradiction from any source goes to
      §18 (Open questions) with both versions and provenance; the user adjudicates.
    - New facts land in the right section with confidence tag + (→NN) source pointer.
    - Superseded non-validated facts are replaced; note "supersedes <date> entry" when material.
    - Resolved §18 items move into the body with their resolution; new conflicts join the list.
    - Update §19: build date, clone dates, anything that changed structurally.
-3. Empirically re-verify any fact a lane contradicted IF one cheap metadata query settles it
-   (the 2026-06-11 timezone probe — executed_at vs getdate() lag — is the model).
 4. Propagate by PROPOSAL, never autonomously: if a NEW hard rule emerged (§1 material), draft the
    verbatim edits for (a) global CLAUDE.md cluster facts, (b) workbench AGENTS.md pointers, and
    (c) the embedded fact blocks in the plugin — `analyze/SKILL.md` (canonical objects + filter),

@@ -7,18 +7,24 @@ corpus lives in tests/test_sql_guard.py — run it after any change to this file
 CLI (used by the bash wrapper; query text arrives on stdin to dodge quoting):
     printf '%s' "$SQL" | sql_guard.py check         # exit 0 ok / exit 2 blocked (reason on stderr)
     printf '%s' "$SQL" | sql_guard.py needs-limit   # exit 0 = append a LIMIT / exit 1 = don't
+    printf '%s' "$SQL" | sql_guard.py strip-tail    # print SQL with trailing comments/semicolons removed
 
 Python API (used by rs_query.py):
-    from sql_guard import validate_readonly, needs_limit, GuardError
+    from sql_guard import validate_readonly, needs_limit, strip_tail, GuardError
 
 Design notes:
-- Lexes the WHOLE buffer (multiline literals, '' escapes, dollar-quoting, nested
-  block comments) before keyword checks — per-line sed cannot do this and the old
-  bash/python pair had already diverged.
+- A single left-to-right STATE-MACHINE scanner segments the buffer into code /
+  string ('' escapes) / dollar-quote / double-quoted identifier / line comment /
+  nested block comment in ONE pass. Ordered regex passes are NOT safe here: an
+  apostrophe inside a comment (-- don't) would desync a strings-first lexer and
+  let `; drop ...` through — proven bypass, hence the scanner.
 - Double-quoted identifiers are replaced with a neutral token, so a column
   literally named comment/set/copy is usable by quoting it: select "comment" from t.
 - needs_limit is TAIL-anchored: an inner subquery LIMIT no longer suppresses the
   outer row cap.
+- strip_tail removes trailing whitespace, trailing comments, and terminal
+  semicolons from the RAW text (comment-aware), so `rs` can safely append
+  `limit N` or wrap in EXPLAIN even when the query ends `; -- done`.
 """
 
 import re
@@ -34,28 +40,131 @@ WRITE_KEYWORDS = re.compile(
     r"|unload|merge|call|vacuum|analyze|refresh|into|set|begin|commit|rollback|lock|comment)\b"
 )
 
-_BLOCK_COMMENT = re.compile(r"/\*(?:[^*/]|\*(?!/)|/(?!\*))*\*/", re.DOTALL)
+_DOLLAR_TAG = re.compile(r"\$(\w*)\$")
 
 
 class GuardError(Exception):
     pass
 
 
+def _segments(sql: str):
+    """Single-pass scanner. Yields (start, end, kind) covering the whole buffer;
+    kind in {'code','string','dollar','ident','lcomment','bcomment'}."""
+    segs = []
+    i, n = 0, len(sql)
+    code_start = 0
+
+    def flush_code(upto):
+        if upto > code_start:
+            segs.append((code_start, upto, "code"))
+
+    while i < n:
+        c = sql[i]
+        nxt = sql[i + 1] if i + 1 < n else ""
+        if c == "'":
+            flush_code(i)
+            j = i + 1
+            while j < n:
+                if sql[j] == "'":
+                    if j + 1 < n and sql[j + 1] == "'":
+                        j += 2
+                        continue
+                    break
+                j += 1
+            end = min(j + 1, n)
+            segs.append((i, end, "string"))
+            i = end
+            code_start = i
+        elif c == '"':
+            flush_code(i)
+            j = i + 1
+            while j < n:
+                if sql[j] == '"':
+                    if j + 1 < n and sql[j + 1] == '"':
+                        j += 2
+                        continue
+                    break
+                j += 1
+            end = min(j + 1, n)
+            segs.append((i, end, "ident"))
+            i = end
+            code_start = i
+        elif c == "$":
+            m = _DOLLAR_TAG.match(sql, i)
+            if m:
+                flush_code(i)
+                tag = m.group(0)
+                close = sql.find(tag, m.end())
+                end = n if close == -1 else close + len(tag)
+                segs.append((i, end, "dollar"))
+                i = end
+                code_start = i
+            else:
+                i += 1
+        elif c == "-" and nxt == "-":
+            flush_code(i)
+            j = sql.find("\n", i)
+            end = n if j == -1 else j  # the newline itself stays code
+            segs.append((i, end, "lcomment"))
+            i = end
+            code_start = i
+        elif c == "/" and nxt == "*":
+            flush_code(i)
+            depth = 1
+            j = i + 2
+            while j < n and depth:
+                if sql[j] == "/" and j + 1 < n and sql[j + 1] == "*":
+                    depth += 1
+                    j += 2
+                elif sql[j] == "*" and j + 1 < n and sql[j + 1] == "/":
+                    depth -= 1
+                    j += 2
+                else:
+                    j += 1
+            segs.append((i, j, "bcomment"))
+            i = j
+            code_start = i
+        else:
+            i += 1
+    flush_code(n)
+    return segs
+
+
 def normalize(sql: str) -> str:
-    """Strip literals, quoted identifiers, and comments; lowercase the rest."""
-    s = sql
-    # dollar-quoted strings ($$...$$ or $tag$...$tag$), then single-quoted
-    # literals with '' escapes (multiline-safe), then double-quoted identifiers
-    s = re.sub(r"\$(\w*)\$.*?\$\1\$", "''", s, flags=re.DOTALL)
-    s = re.sub(r"'(?:[^']|'')*'", "''", s, flags=re.DOTALL)
-    s = re.sub(r'"(?:[^"]|"")*"', " qident ", s, flags=re.DOTALL)
-    # line comments, then block comments (loop handles Postgres-style nesting)
-    s = re.sub(r"--[^\n]*", "", s)
-    prev = None
-    while prev != s:
-        prev = s
-        s = _BLOCK_COMMENT.sub(" ", s)
-    return s.lower()
+    """Neutralize literals/identifiers/comments; lowercase the remaining code."""
+    parts = []
+    for s, e, k in _segments(sql):
+        if k in ("string", "dollar"):
+            parts.append("''")
+        elif k == "ident":
+            parts.append(" qident ")
+        elif k in ("lcomment", "bcomment"):
+            parts.append(" ")
+        else:
+            parts.append(sql[s:e])
+    return "".join(parts).lower()
+
+
+def strip_tail(sql: str) -> str:
+    """Remove trailing whitespace, trailing comments, and terminal semicolons
+    from the raw text (comment-aware). Interior comments are preserved."""
+    segs = _segments(sql)
+    for s, e, k in reversed(segs):
+        if k in ("lcomment", "bcomment"):
+            continue
+        if k == "code":
+            frag = sql[s:e]
+            while True:
+                frag = frag.rstrip()
+                if frag.endswith(";"):
+                    frag = frag[:-1]
+                else:
+                    break
+            if not frag:
+                continue  # segment was only whitespace/semicolons — keep trimming
+            return sql[: s + len(frag)]
+        return sql[:e]  # string/dollar/ident segment ends the tail scan
+    return ""
 
 
 def validate_readonly(sql: str) -> None:
@@ -88,8 +197,9 @@ def needs_limit(sql: str, first_words_exempt=("explain", "show")) -> bool:
 
 
 def main() -> int:
-    if len(sys.argv) != 2 or sys.argv[1] not in ("check", "needs-limit"):
-        print("usage: sql_guard.py {check|needs-limit}  (SQL on stdin)", file=sys.stderr)
+    modes = ("check", "needs-limit", "strip-tail")
+    if len(sys.argv) != 2 or sys.argv[1] not in modes:
+        print(f"usage: sql_guard.py {{{'|'.join(modes)}}}  (SQL on stdin)", file=sys.stderr)
         return 64
     sql = sys.stdin.read()
     if sys.argv[1] == "check":
@@ -98,6 +208,9 @@ def main() -> int:
         except GuardError as e:
             print(f"sql_guard: {e}", file=sys.stderr)
             return 2
+        return 0
+    if sys.argv[1] == "strip-tail":
+        sys.stdout.write(strip_tail(sql))
         return 0
     return 0 if needs_limit(sql) else 1
 

@@ -100,8 +100,9 @@ case "$MODE" in
         validate_readonly "$Q"
         load_creds
         if wants_limit "$Q"; then
-            # own line, so a trailing `-- comment` can never swallow the cap
-            Q="$(printf '%s' "$Q" | sed -E 's/;[[:space:]]*$//')"$'\n'"limit ${ROW_CAP}"
+            # strip-tail is comment-aware (handles `; -- done` endings); the cap
+            # goes on its own line so no comment can ever swallow it
+            Q="$(printf '%s' "$Q" | python3 "$GUARD" strip-tail)"$'\n'"limit ${ROW_CAP}"
         fi
         run_psql "$Q"
         ;;
@@ -139,7 +140,7 @@ case "$MODE" in
         load_creds
         # strip a leading EXPLAIN so `rs explain "explain select..."` doesn't double up
         Q="$(printf '%s' "$Q" | sed -E 's/^[[:space:]]*[Ee][Xx][Pp][Ll][Aa][Ii][Nn][[:space:]]+//')"
-        run_psql "explain $(printf '%s' "$Q" | sed -E 's/;[[:space:]]*$//')"
+        run_psql "explain $(printf '%s' "$Q" | python3 "$GUARD" strip-tail)"
         ;;
     find)
         P="${1:?usage: rs find <pattern>}"

@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from sql_guard import GuardError, needs_limit, validate_readonly  # noqa: E402
+from sql_guard import GuardError, needs_limit, strip_tail, validate_readonly  # noqa: E402
 
 ALLOW = [
     # bread and butter
@@ -34,6 +34,12 @@ ALLOW = [
     "/* block\ncomment; with semicolon */ select 1",
     "select 1 -- trailing note",
     "select /* nested /* inner */ still comment */ 1",
+    # apostrophes INSIDE comments must not desync the lexer (2026-07-06 scanner rewrite)
+    "select 1 -- don't stop here\nfrom dual",
+    "select 'don''t' as s -- can't",
+    # comment markers INSIDE strings are just text
+    "select '-- not a comment; drop' as x",
+    "select '/* not a comment */' as y",
     # trailing semicolon is fine (single statement)
     "select 1;",
 ]
@@ -62,6 +68,12 @@ BLOCK = [
     "select 1; select 2",
     # keyword hidden AFTER a literal-with-escape (lexer must not desync)
     "select 'a''b' as s; delete from foo",
+    # PROVEN BYPASSES of the regex-ordered normalizer (apostrophe in a comment
+    # opened a bogus string that swallowed the ; and the write keyword) — the
+    # state-machine scanner must block all three:
+    "select 1 -- don't\n; drop table foo -- x'",
+    "select 1 /* ' */ ; drop table foo /* ' */",
+    "select count(*) from d -- founder's\n; delete from d -- boss's",
     # first-word gate
     "with foo as (select 1) delete from bar",
     "",
@@ -83,6 +95,20 @@ LIMIT_CASES = [
     # explain/show never get a cap appended
     ("explain select * from t", False),
     ("show search_path", False),
+    # trailing comment after the final semicolon still wants a cap
+    ("select 1; -- done", True),
+]
+
+# (sql, expected strip_tail output) — used before appending LIMIT / wrapping EXPLAIN
+STRIP_TAIL_CASES = [
+    ("select 1; -- done", "select 1"),
+    ("select 1 -- note", "select 1"),
+    ("select 1;\n-- done", "select 1"),
+    ("select 1;", "select 1"),
+    ("select ';' as s;", "select ';' as s"),
+    ("select 1 /* tail */", "select 1"),
+    ("select 1 -- a\n-- b", "select 1"),
+    ("select 'keep -- this'", "select 'keep -- this'"),
 ]
 
 
@@ -103,7 +129,11 @@ def main() -> int:
         got = needs_limit(sql)
         if got != expect:
             failures.append(f"needs_limit({sql!r}) = {got}, expected {expect}")
-    total = len(ALLOW) + len(BLOCK) + len(LIMIT_CASES)
+    for sql, expect in STRIP_TAIL_CASES:
+        got = strip_tail(sql)
+        if got != expect:
+            failures.append(f"strip_tail({sql!r}) = {got!r}, expected {expect!r}")
+    total = len(ALLOW) + len(BLOCK) + len(LIMIT_CASES) + len(STRIP_TAIL_CASES)
     if failures:
         print(f"FAIL — {len(failures)}/{total}:")
         for f in failures:

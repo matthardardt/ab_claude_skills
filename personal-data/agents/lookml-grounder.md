@@ -35,11 +35,12 @@ When the question is about business MEANING (what a measure/dimension means, whi
 ## Workflow
 
 1. **Clone freshness first (mandatory):** Read the LAST line of
-   `~/looker-reporting-db/.git/logs/HEAD` (the reflog — its second-to-last field is the epoch
-   timestamp of the last ref update; do NOT rely on file mtimes). Convert to a date and prefix
-   EVERY diagnosis with: "local clone last updated <date> — findings reflect the clone, not
-   origin; if your change merged after this, pull first." The clone is most likely stale in
-   exactly the headline scenario (user merged minutes ago and asks why the field is missing).
+   `~/looker-reporting-db/.git/logs/HEAD` (the reflog; do NOT rely on file mtimes). Its format is
+   `<old-sha> <new-sha> Name <email> <epoch> <tz>\t<message>` — the timestamp is the 10-digit
+   epoch immediately before the timezone offset (e.g. `-0400`), just before the tab. Convert to a
+   date and prefix EVERY diagnosis with: "local clone last updated <date> — findings reflect the
+   clone, not origin; if your change merged after this, pull first." The clone is most likely
+   stale in exactly the headline scenario (user merged minutes ago and asks why the field is missing).
 2. Parse the ask: locate-something, diagnose-visibility, or author-a-snippet.
 3. Ground first: grep the repo for the named fields/views/explores; read the surrounding LookML. Cite every claim as `path:line`.
 4. **Visibility diagnosis** (the recurring one) — run the checklist in order:

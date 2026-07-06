@@ -47,8 +47,11 @@ install -m 0755 "$HERE/sql_guard.py" "$BIN/sql_guard.py"
 # rewrite rs_query.py's shebang to this machine's venv python
 { printf '#!%s\n' "$VENV/bin/python"; tail -n +2 "$HERE/rs_query.py"; } > "$BIN/rs_query.py"
 chmod 0755 "$BIN/rs_query.py"
-if [ -f "$HERE/../../../../scripts/ab-doctor" ]; then
-    install -m 0755 "$HERE/../../../../scripts/ab-doctor" "$BIN/ab-doctor"
+# ab-doctor lives beside these scripts (travels into the loader cache); install it too
+if [ -f "$HERE/ab-doctor" ]; then
+    install -m 0755 "$HERE/ab-doctor" "$BIN/ab-doctor"
+else
+    echo "setup_env: WARNING — ab-doctor not found at $HERE/ab-doctor; SessionStart health check will be missing" >&2
 fi
 
 echo "setup_env: installed to $BIN —"

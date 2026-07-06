@@ -14,6 +14,7 @@ metadata:
     reads:
       - filesystem:working-directory
       - filesystem:~/.claude/actblue-data-dictionary.md
+      - filesystem:~/.claude/actblue-semantic-catalog
     writes: []
     forbidden:
       - resource: warehouse
@@ -53,7 +54,7 @@ restate a skill's own description.
 | Is Looker/LookML research: find a field, "why isn't this showing", draft a dimension/measure | Dispatch `lookml-grounder` agent (checks clone freshness first); it returns snippets — the user applies and deploys them |
 | Is a cross-system "what's on my plate / catch me up" briefing | Skill `personal-productivity:command-center` (supersedes `email-briefing`, which is email-ONLY) |
 | Mentions refreshing the data dictionary or asks if it is stale | Skill `personal-data:dictionary-refresh` — confirm with the user before it dispatches the 7-agent crawl (it is expensive) |
-| Is statistical methodology with NO warehouse pull (test choice, distributions, interpretation) | No installed skill owns this — handle inline, grounded in `~/.claude/actblue-data-dictionary.md` and the semantic catalog. If it is really test-selection/power for a study, that is the causal row above |
+| Is statistical methodology with NO warehouse pull (test choice, distributions, interpretation) | No installed skill owns this — it is the no-destination case of Rule 5, so answer it directly, grounded in `~/.claude/actblue-data-dictionary.md` and the semantic catalog. If it is really test-selection/power for a study, that is the causal row above |
 | Wants a recurring monitor or alert on a metric | Skill `anthropic-skills:schedule` for a local job; if it should live in Looker, route the dashboard/alert work to `lookml-grounder` for grounding first |
 | Wants to profile/explore an unfamiliar table | Route to `/analyze` (its Phase 1 discovery) or dispatch `warehouse-analyst` for a multi-table sweep. The router itself NEVER runs warehouse queries |
 | Is anomaly-model or ACH-workbench project work | No skill — work under that workbench's `AGENTS.md` context; route sub-tasks (pulls, reviews) through the rows above |
@@ -85,8 +86,9 @@ web research, skill authoring — routes by native skill descriptions; announce 
 The key words "MUST", "MUST NOT", "SHOULD", "MAY" are per RFC 2119.
 
 - The router MUST NOT do the destination's work itself — no SQL, no warehouse access (not
-  even `rs cols`/`rs peek`), no LookML, no analysis in-router; its output is a routing
-  decision plus the handoff
+  even `rs cols`/`rs peek`), no LookML, no writing-a-real-analysis in-router; its output is a
+  routing decision plus the handoff. The sole exception is the table's explicit no-skill-owns-it
+  rows (e.g. pure statistical-methodology questions), which it answers directly per Rule 5
 - The router MUST pass the user's original wording in the handoff args and MUST NOT silently
   narrow or reinterpret the ask
 - The router MUST verify the destination exists in the session before announcing it; if

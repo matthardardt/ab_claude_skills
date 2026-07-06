@@ -2,7 +2,7 @@
 name: exec-qa-prep
 description: >-
   Prepares data presenters for executive-level Q&A. Takes a data story, analytics output, or
-  presentation summary and generates 10-15 likely leadership questions organized by executive
+  presentation summary and generates 12-17 likely leadership questions organized by executive
   perspective (Financial/CFO, Strategic/CEO, Technical/CTO, Scope & Process/Head of Data) — each
   with a data-grounded answer and confidence rating. Also surfaces "gotcha" questions on methodology,
   data quality, and scope. Use when someone says: "prep me for this presentation", "what will
@@ -80,10 +80,11 @@ Identify:
 
 ### Step 2: Generate Questions
 
-Generate 10-15 questions total, organized by persona. Aim for:
+Generate 12-17 questions total, organized by persona. Aim for:
 - 3-4 Financial questions
 - 3-4 Strategic questions
 - 2-3 Technical/methodology questions
+- 2-3 Scope & Process / Head of Data questions
 - 2-3 Gotcha questions (minimum — add more if the data has obvious gaps)
 
 For each question, provide:

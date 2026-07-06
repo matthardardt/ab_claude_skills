@@ -9,8 +9,10 @@ description: >-
   "write a query" request — prefer it over generic data skills for anything touching the ActBlue
   warehouse. Use when someone says: "analyze X", "what's driving X", "pull X from the warehouse",
   "how many/much X", "donation trends", "compare X vs Y", "write a query for X", "investigate X",
-  "answer this data question", "run the numbers on X", "/analyze". Do NOT use for causal questions
-  ("did X work", impact of a rollout, cannibalization, A/B analysis, "is this effect real") — use
+  "answer this data question", "run the numbers on X", "/analyze". A descriptive anomaly check
+  with no named cause ("is this spike real?", "is this number right?") is analyze's job. Do NOT
+  use for causal questions with a named treatment/change ("did X work", impact of a rollout,
+  cannibalization, A/B analysis, "is this effect real or selection") — use
   personal-data:experiment-design first, then chain back here for execution. Do NOT use to review
   existing code (use data-code-review), to generate Python/dbt artifacts without running an
   analysis (use code-draft), or to prep presentation Q&A (use exec-qa-prep — chain after this).

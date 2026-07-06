@@ -80,7 +80,7 @@ def main():
         pass
 
     # 3. runtime scripts
-    for f in ("rs", "sql_guard.py", "rs_query.py"):
+    for f in ("rs", "sql_guard.py", "rs_query.py", "ab-doctor"):
         if not (HOME / ".claude" / "bin" / f).exists():
             issues.append(f"~/.claude/bin/{f} missing — run setup_env.sh from the plugin's analyze/scripts dir")
             break
