@@ -272,3 +272,10 @@ The key words "MUST", "MUST NOT", "SHALL", "SHOULD", "SHOULD NOT", "MAY" are per
   results, or analysis files to any personal repository (`matthardardt/*`) or any destination
   outside the ActBlue ecosystem, and MUST NOT run `git push` to ANY remote without the user's
   express, confirmed permission in the current conversation
+- The skill MUST NOT post to Jira or any external issue tracker — creating, editing, commenting on,
+  transitioning, worklogging, or linking an issue — without the user's explicit, in-conversation
+  confirmation for that specific action. Default to producing a DRAFT (title, type, priority,
+  description, acceptance criteria) for the user to file themselves. Offering to post is fine;
+  executing a post without a clear "yes" is not. (User standing policy 2026-08-04, reinforced
+  2026-08-18; enforced independently by a `~/.claude/settings.json` ask-gate on the Atlassian
+  Jira write tools.)
