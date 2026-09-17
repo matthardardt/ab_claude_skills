@@ -200,14 +200,35 @@ explained in `analysis.md` before any finding is reported:
    n/denominator on BOTH sides, and either a quick two-proportion z / Wilson interval check
    (scipy is in the venv) or the explicit tag "descriptive gap — not tested for significance".
    The tag is MANDATORY when either side's n < 1,000 or the gap is within ~2 standard errors.
+7. **Independent re-derivation — the gate on writing anything.** Before Phase 5 begins, dispatch
+   the `warehouse-analyst` agent in **verify mode** to re-derive every number that will appear in
+   the narrative or deliverable. This gate is not reserved for high-stakes work; self-QA cannot
+   catch a definition the whole analysis got wrong, because the same reasoning wrote both the
+   query and the check. An independent path can.
 
-For high-stakes deliverables (going to leadership, large dollar claims), dispatch the
-`warehouse-analyst` agent in **verify mode**: pass the business question verbatim, the claimed
-headline number(s) with period/filters, and the tables the original used as a
-use-a-different-path hint — NOT the original SQL (it would anchor the verifier). Reconcile
-MATCH/MISMATCH before delivery.
+   The dispatch carries: the business question verbatim, the claimed number(s) with period,
+   population, and filters, and the tables the original used as a **use-a-different-path hint**
+   (prefer `agg_contributions` if the original used `joined_lineitems`, and vice versa). It MUST
+   NOT carry the original SQL, and the agent MUST NOT read it — anchoring the verifier destroys
+   the only thing the gate buys. Batch the numbers into one dispatch per independent question and
+   dispatch questions in parallel; verification is a fan-out, not a queue.
+
+   Reconcile before writing: **MATCH** (within the agent's stated tolerance — alternate-grain
+   tables rarely reconcile exactly) proceeds, and the brief records the verified figure, the
+   alternate path used, and the tolerance. **MISMATCH** is a stop: diagnose which side is wrong
+   before any narrative is written, and never split the difference or quietly prefer your own
+   number. A verification that returns BLOCKED or UNDERSPECIFIED is not a pass — resolve it or
+   ship the number explicitly tagged `unverified` with the reason.
+
+   Exempt, and only these: numbers already verified earlier in this session, figures the user
+   supplied themselves, and pure diagnostics (row counts, null rates, grain assertions) that
+   appear in QA notes rather than in a finding. A one-number chat answer is NOT exempt — that
+   number is the entire deliverable.
 
 ## Phase 5 — Insights
+
+Do not start this phase until Phase 4 gate 7 has returned. Every number below is a verified
+number or a number explicitly tagged `unverified` with its reason.
 
 - Profile: rows, grain, time range, data quality flags — stated upfront
 - 3-5 findings, each citing a specific number ("Q1 was $X, up Y% vs Q4" — never "revenue increased")
@@ -259,6 +280,13 @@ The key words "MUST", "MUST NOT", "SHALL", "SHOULD", "SHOULD NOT", "MAY" are per
 - The skill MUST pre-register grain/row-count/magnitude expectations before executing, and MUST
   run every Phase 4 gate before presenting any finding — including the grain assertion on every
   join and the n + significance-or-tag rule on every comparison
+- Every number appearing in a narrative, finding, brief, chart, or chat headline MUST first be
+  independently re-derived by the `warehouse-analyst` agent in verify mode (Phase 4 gate 7),
+  except the three stated exemptions. The dispatch MUST NOT include the original SQL. A MISMATCH
+  MUST be resolved before any narrative is written; a number that cannot be verified MUST ship
+  tagged `unverified` with its reason, and MUST NOT be presented as confirmed. The skill MUST NOT
+  substitute its own second query for the independent agent — same-context re-checking is not
+  verification
 - Every finding MUST cite a specific number from the results and state its definitions
   (tips, refund convention, counting key) and period
 - For multi-query analyses the skill MUST create the output folder and running `analysis.md` in

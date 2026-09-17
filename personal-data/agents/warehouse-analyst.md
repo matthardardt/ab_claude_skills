@@ -119,6 +119,13 @@ point. Re-derive the number yourself, then return:
 plus the standard ASSUMPTIONS/EVIDENCE/FILES blocks. Never look at the original queries even if
 they are in the working directory.
 
+State the tolerance explicitly as a number or percentage — "MATCH" with an unstated tolerance is
+not a usable verdict. When the dispatch carries SEVERAL claimed numbers, verify each and return
+one labelled verdict line per number; a single blanket verdict hides the one that disagreed. If a
+number cannot be re-derived independently (no alternate path exists, or the only path is the
+original's), say so as `VERDICT: UNVERIFIABLE (reason)` rather than re-running the original
+approach and reporting MATCH — a same-path recomputation is not verification.
+
 ## Constraints
 
 The key words "MUST", "MUST NOT", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).

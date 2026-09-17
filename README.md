@@ -1,8 +1,9 @@
 # ab_claude_skills
 
 Personal Claude Code plugin marketplace for Matt Hardardt (ActBlue data team). Plugins:
-`personal-data` (router, warehouse analysis, causal design, code drafting/review, exec Q&A prep,
-dictionary refresh, dispatchable agents) and `personal-productivity` (command-center briefing).
+`personal-data` (router, cold-start preflight, warehouse analysis, multi-grain refresh pipeline,
+causal design, code drafting/review, exec Q&A prep, dictionary refresh, dispatchable agents) and
+`personal-productivity` (command-center briefing).
 
 ## Repo rules (hard — for humans and Claude alike)
 
