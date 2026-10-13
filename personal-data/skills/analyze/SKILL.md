@@ -148,7 +148,14 @@ Valid-at-the-time variant: `(is_refunded is false or refunded_at::date > <period
 ## Phase 2 — Write and Validate SQL, then pre-register expectations
 
 House style (from `~/analytics/.sqlfluff`): lowercase everything, leading commas, 4-space indent,
-CTEs not indented, max line 160. Descriptive CTE names.
+max line 160. Descriptive CTE names.
+- **CTE layout: names flush, bodies indented.** `indented_ctes = False` only keeps `with name as (`
+  at column 0; everything inside the parentheses is indented 4 spaces (sqlfluff indents bracket
+  contents). Unindented bodies get flagged in review.
+- **As few CTEs as possible.** One pass per source/grain: compute related metrics as flags or
+  conditional aggregates (`count(distinct case when …)`, `bool_or`, `sum(case …)`) in the same CTE
+  instead of one CTE per metric, and do segment splits in the final select rather than separate
+  per-metric `_by_segment` CTEs joined back. Add a CTE only for a real grain change or reuse.
 - **No aliasing unless required.** Reference tables by name and leave plain columns un-renamed.
   Alias only when SQL forces it: a derived table/subquery in `from`, a self-join or the same table
   joined twice, a column name that collides across joined tables, or a computed column that needs a

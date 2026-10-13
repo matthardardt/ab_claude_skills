@@ -81,7 +81,10 @@ Write complete, runnable code. Never truncate or abbreviate. If output approache
 build it in numbered parts the user can assemble.
 
 **For Redshift SQL:**
-- Structure with CTEs for readability
+- Structure with CTEs for readability, but as few as possible: one pass per source/grain, related
+  metrics as flags/conditional aggregates in the same CTE, segment splits in the final select; a new
+  CTE only for a real grain change or reuse
+- CTE names flush at column 0, CTE bodies indented 4 spaces inside the parentheses
 - Name CTEs descriptively (what they represent, not `cte1`, `temp`, `final`)
 - Add `LIMIT` on exploratory queries; remove for production
 - Never `SELECT *` in production — enumerate columns

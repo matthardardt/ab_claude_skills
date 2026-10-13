@@ -98,8 +98,13 @@ with the catalog or is silent.
 
 ## 7. Style pass (Suggestions only)
 
-`~/analytics/.sqlfluff` house style: lowercase, leading commas, 4-space indent, CTEs not indented,
-max line 160, descriptive CTE names.
+`~/analytics/.sqlfluff` house style: lowercase, leading commas, 4-space indent, max line 160,
+descriptive CTE names.
+- Unindented CTE bodies — Suggestion. `indented_ctes = False` keeps CTE names at column 0, but
+  the body inside the parentheses is indented 4 spaces.
+- CTE sprawl — Suggestion (Warning if it forces repeated scans of a large/Spectrum table): separate
+  CTEs per metric or per segment over the same source/grain that could be one pass with flags or
+  conditional aggregates, or `_by_segment` CTEs joined back instead of splitting in the final select.
 - Unnecessary aliasing — table aliases or column renames where SQL doesn't require one (required:
   derived tables, self-joins/same table twice, name collisions, computed columns) — Suggestion.
   Any alias that is used: `as`, ≥4 chars.

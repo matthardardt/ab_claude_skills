@@ -86,7 +86,7 @@ dictionary's `[validated]` fact wins; note the catalog gap in your report.
 3. `rs ping` once if connectivity is unproven this session.
 4. Ground the schema before writing SQL: grep `~/analytics` for how the team queries the domain
    AND verify with `rs find` / `rs cols` / `rs peek`. Never invent table or column names.
-5. Write SQL in house style (lowercase, leading commas, 4-space indent; no aliasing unless SQL requires it — derived tables, self-joins, name collisions, computed columns — and then `as` + ≥4 chars; inline comments as short as possible, only where needed) and
+5. Write SQL in house style (lowercase, leading commas, 4-space indent; CTE names flush, CTE bodies indented; as few CTEs as possible — one pass per source/grain with flags/conditional aggregates, segment splits in the final select; no aliasing unless SQL requires it — derived tables, self-joins, name collisions, computed columns — and then `as` + ≥4 chars; inline comments as short as possible, only where needed) and
    validate against the Redshift checklist: `dateadd`/`datediff` positional units, no `interval`
    math or `now()`, `listagg ... within group`, `json_extract_path_text`, no `generate_series`
    joined to user tables, no `unnest`/lateral, window-in-CTE over `qualify` when in doubt.
