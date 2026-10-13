@@ -85,7 +85,10 @@ build it in numbered parts the user can assemble.
 - Name CTEs descriptively (what they represent, not `cte1`, `temp`, `final`)
 - Add `LIMIT` on exploratory queries; remove for production
 - Never `SELECT *` in production — enumerate columns
-- Comment on non-obvious join logic or business rule assumptions
+- No aliasing unless SQL requires it (derived tables, self-joins/same table twice, name collisions,
+  computed columns); otherwise reference tables by name and keep column names as-is. When required: `as`, ≥4 chars
+- Inline comments: as short as possible, only where needed (non-obvious join logic or business-rule
+  assumption). No restating the code, no banners
 
 **For Python:**
 - Import only what's used
@@ -93,6 +96,7 @@ build it in numbered parts the user can assemble.
 - For charts: matplotlib or plotly; include `fig.savefig()` or `fig.show()`
 - For Redshift connections: use `psycopg2` or `sqlalchemy` with env var credentials (`os.environ`)
 - Never hardcode credentials or connection strings
+- Inline comments: as short as possible, only where needed; no restating the code
 
 **For dbt:**
 - Use `{{ ref('model_name') }}` for model references

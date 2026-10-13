@@ -98,5 +98,10 @@ with the catalog or is silent.
 
 ## 7. Style pass (Suggestions only)
 
-`~/analytics/.sqlfluff` house style: lowercase, leading commas, explicit aliases ≥4 chars,
-4-space indent, CTEs not indented, max line 160, descriptive CTE names.
+`~/analytics/.sqlfluff` house style: lowercase, leading commas, 4-space indent, CTEs not indented,
+max line 160, descriptive CTE names.
+- Unnecessary aliasing — table aliases or column renames where SQL doesn't require one (required:
+  derived tables, self-joins/same table twice, name collisions, computed columns) — Suggestion.
+  Any alias that is used: `as`, ≥4 chars.
+- Verbose inline comments (restating the code, banners, narration) — Suggestion. Keep only short
+  comments on the non-obvious why.

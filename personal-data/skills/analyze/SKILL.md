@@ -147,8 +147,14 @@ Valid-at-the-time variant: `(is_refunded is false or refunded_at::date > <period
 
 ## Phase 2 — Write and Validate SQL, then pre-register expectations
 
-House style (from `~/analytics/.sqlfluff`): lowercase everything, leading commas, explicit aliases
-(min 4 chars), 4-space indent, CTEs not indented, max line 160. Descriptive CTE names.
+House style (from `~/analytics/.sqlfluff`): lowercase everything, leading commas, 4-space indent,
+CTEs not indented, max line 160. Descriptive CTE names.
+- **No aliasing unless required.** Reference tables by name and leave plain columns un-renamed.
+  Alias only when SQL forces it: a derived table/subquery in `from`, a self-join or the same table
+  joined twice, a column name that collides across joined tables, or a computed column that needs a
+  name. Where an alias is required, use `as` and ≥4 chars (sqlfluff).
+- **Inline comments: shortest possible, only what's needed.** A few words on the non-obvious "why"
+  (odd filter, business rule, known trap). No restating the code, no section banners, no narration.
 
 Redshift checklist — verify before executing, note "Redshift check: passed" once per query set:
 - `dateadd`/`datediff` positional units, `getdate()`/`current_date` — no `interval` math, no `now()`
