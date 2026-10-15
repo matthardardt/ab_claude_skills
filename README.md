@@ -49,3 +49,8 @@ path skills, agents, and CLAUDE.md reference. Never point components at the per-
   are propagation targets of `dictionary-refresh` Phase 2.4 — keep them thin, prefer catalog pointers.
 - `ab-doctor` runs at session start (hook) and self-repairs a wiped loader cache; run
   `ab-doctor --verbose` any time skills look missing.
+- **Skill-listing budget**: the listing is capped at ≈1% of context; on overflow Claude Code drops
+  descriptions starting with the least-invoked skills (seen for `dictionary-refresh` and
+  `command-center`, which then can't auto-trigger). Per-skill length isn't the cause — the fix is
+  the `skillListingBudgetFraction` / `skillOverrides` settings (e.g. set unused skills
+  `"name-only"`), applied by Matt in `~/.claude/settings.json`.

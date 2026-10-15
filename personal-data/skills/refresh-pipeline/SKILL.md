@@ -185,11 +185,14 @@ optional here. A live FT ramp tile sat ~4× inflated on an exec dashboard; the c
 paste is measured in leadership decisions.
 
 For every NEW or materially CHANGED published table, dispatch the `warehouse-analyst` agent in
-**verify mode** before the numbers are pasted or narrated: pass the business question verbatim,
-the claimed headline figures with period and filters, and the tables used as a
-use-a-different-path hint — **never the SQL** (it would anchor the verifier). Reconcile
-MATCH/MISMATCH first; a MISMATCH blocks the paste until explained. Unchanged tables that the diff
-reports as identical to what was already pasted do not need re-verification.
+**verify mode** before the numbers are pasted or narrated: pass the business question, the
+claimed headline figures with period and filters, the catalog entries used, and the tables as a
+use-a-different-path hint — **never the SQL** (it would anchor the verifier). Tolerance caps and
+path choice follow the agent's verify-mode contract (exact for same-table counts/sums, ≤0.5% for
+cross-table dollar sums, fixed before computing). Reconcile MATCH/MISMATCH first; a MISMATCH
+blocks the paste until explained, and a `SHARED-DEFINITION` MATCH is noted in the report.
+Unchanged tables that the diff reports as identical to what was already pasted do not need
+re-verification.
 
 Then report: which tiles moved, which are unchanged, cross-check verdicts with reference ages,
 verify-mode verdicts, any step that failed and why, and the paste checklist from

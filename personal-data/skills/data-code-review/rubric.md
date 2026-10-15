@@ -34,6 +34,9 @@ Warnings) / `approve-with-warnings` (zero Blockers) / `block` (any Blocker).
 
 - `dateadd`/`datediff` positional units — no Postgres `interval` math, no `now()`
 - `listagg ... within group` not `string_agg`; `json_extract_path_text` not `->`/`->>`
+- `median` / `percentile_cont` / `listagg` cannot share a query with ANY `count(distinct …)`
+  (runtime ERROR), and only one inverse-distribution ordering per query — Blocker; fix with
+  separate passes joined back, or long format
 - No `unnest()` on tables; no `generate_series` joined to user tables (leader-node only)
 - No LATERAL; `qualify` only when certain, else window-in-subquery
 - No `ON CONFLICT`, `SERIAL`, native `JSONB`/`UUID`, `CITEXT`
@@ -44,8 +47,8 @@ Warnings) / `approve-with-warnings` (zero Blockers) / `block` (any Blocker).
 
 Resolve what the code CLAIMS to compute against the semantic catalog
 (`~/.claude/actblue-semantic-catalog/bin/catalog metric|filter|table|join <x>`) and flag drift;
-read `~/.claude/actblue-data-dictionary.md` for nuance (§ hard rules, refund conventions,
-known traps — locate sections by heading text, not only by number).
+read `~/.claude/actblue-data-dictionary.md` for nuance ("Hard rules", "Refunds, chargebacks,
+disputes", "Known bugs, traps & deprecations" — locate sections by heading text, never by number).
 
 **Precedence (do not invert this):** the prose dictionary's `[validated]` facts OUTRANK the
 catalog — the catalog is a regenerated projection and may be stale. Divergence from the catalog
@@ -64,8 +67,12 @@ with the catalog or is silent.
 - Cents vs dollars (`extended_lineitems.amount` is cents; `istip` there is a string)
 - Refund convention matched to purpose: live (`is_paid`) vs published
   (`refund_id is null or refunded_<period> > paid_<period>`)
-- Timezone: indigo timestamps are US Eastern wall-clock — any `convert_timezone('UTC', …)`
-  on them is a Blocker; Mixpanel `time` IS epoch UTC
+- Timezone: indigo timestamps are US Eastern wall-clock — ANY conversion of them is a Blocker:
+  `convert_timezone(…)` in 2- or 3-arg form (2-arg assumes a UTC source), `at time zone`, or
+  `dateadd(hour, ±4/5, …)` offsets. Mixpanel `time` IS epoch UTC
+- Literal enum values and columns: check `catalog dimension <x>` / `catalog table <x>` — values
+  are case-sensitive (e.g. `entity_disbursement_type` is 'Conduit' / 'Merchant Account'; a
+  lowercase filter returns 0 rows), and columns marked LOOKML-DERIVED don't exist in the warehouse
 - Unfiltered Spectrum scans on `production_*` tables (Warning; Blocker in anything recurring)
 - Demographic joins via `md5(lower(email))`
 
@@ -94,6 +101,13 @@ with the catalog or is silent.
   3-arg; `diff_days()`/`add_days()` not date arithmetic; `pivot_index(${m}, i)` never
   `${m}[Yes]`; `min()`/`max()` are column-wise — `if()` for scalar compares
 - `sql:` blocks are Redshift — apply pass 2 to them
+- Joins/fan-out (Blocker): every view in a joined explore declares `primary_key: yes`; each
+  join's `relationship:` matches the real cardinality (check the grain in the catalog /
+  dictionary); measures on the "one" side of a fanning join must be symmetric-aggregate safe
+  (PK present, or `sum_distinct`/`average_distinct` with `sql_distinct_key`)
+- Table-calc Totals: the Totals/Row Totals cell re-applies the calc to the totals row, it does
+  not sum the column — a nonlinear calc (cap, ratio, `if`) shows a silently wrong total. Blocker
+  if that total is consumed; fix with a LookML measure or custom dimension + Aggregate→Sum
 - New explore joins carry a `fields:` allowlist — Warning
 - Business filters at the viz/filter level, not baked into calcs/dimensions (user preference)
 

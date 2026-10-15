@@ -52,10 +52,13 @@ dictionary-outranks-catalog precedence rule — do not review from a from-memory
    `~/.claude/actblue-semantic-catalog/bin/catalog metric|filter|table|join <x>`, honoring the
    precedence rule: a divergence backed by a dictionary `[validated]` fact is a Suggestion to fix
    the catalog, never a Blocker) → dbt / Python / LookML as applicable → style.
-3. **Compile check (optional, read-only)**: when the warehouse is reachable,
-   `~/.claude/bin/rs explain "<query>"` to catch syntax errors and insane scan plans, and
-   `~/.claude/bin/rs cols <schema.table>` to verify referenced columns exist. Run a
-   data-returning `rs sql` ONLY when the dispatch prompt explicitly asks for a sanity-check pull.
+3. **Compile check (REQUIRED when the warehouse is reachable, read-only)**: run
+   `~/.claude/bin/rs explain "<query>"` on every standalone SQL statement (not Jinja/LookML
+   fragments) — it catches runtime-only errors the rubric can miss (e.g. MEDIAN + COUNT DISTINCT)
+   and insane scan plans; an explain ERROR is a Blocker. Use `~/.claude/bin/rs cols
+   <schema.table>` to verify referenced columns exist. If `rs` exits 3 (no connection), report
+   "compile check skipped — warehouse unreachable" under open questions; never skip it silently.
+   Run a data-returning `rs sql` ONLY when the dispatch prompt explicitly asks for a sanity-check pull.
 4. Return the report:
    - **Verdict**: approve / approve-with-warnings / block
    - Findings, each: grade (Blocker/Warning/Suggestion), `file:line`, what is wrong, why it

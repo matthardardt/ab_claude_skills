@@ -40,7 +40,7 @@ identify the right language and tooling, and produce working code that follows A
 
 ## Tech Stack Context
 
-- **Data warehouse**: Redshift (use `DATEADD`, `DATEDIFF`, `GETDATE()`, `LISTAGG`, `JSON_EXTRACT_PATH_TEXT`)
+- **Data warehouse**: Redshift (use `dateadd`, `datediff`, `getdate()`, `listagg`, `json_extract_path_text`)
 - **Python**: pandas, matplotlib, plotly, scikit-learn, psycopg2/SQLAlchemy for Redshift connections
 - **Transformation**: dbt (Jinja templates, `ref()` / `source()`, `{{ config(...) }}`)
 - **ETL**: Hightouch, Fivetran — describe transformations in SQL/dbt, don't generate ETL configs unless asked
@@ -80,14 +80,16 @@ If the requirement is clear enough, proceed without asking — avoid unnecessary
 Write complete, runnable code. Never truncate or abbreviate. If output approaches length limits,
 build it in numbered parts the user can assemble.
 
-**For Redshift SQL:**
+**For Redshift SQL** (house style = `~/analytics/.sqlfluff`):
+- Lowercase everything (keywords, functions, types, literals); leading commas; 4-space indent;
+  lines ≤160 chars
 - Structure with CTEs for readability, but as few as possible: one pass per source/grain, related
   metrics as flags/conditional aggregates in the same CTE, segment splits in the final select; a new
   CTE only for a real grain change or reuse
 - CTE names flush at column 0, CTE bodies indented 4 spaces inside the parentheses
 - Name CTEs descriptively (what they represent, not `cte1`, `temp`, `final`)
-- Add `LIMIT` on exploratory queries; remove for production
-- Never `SELECT *` in production — enumerate columns
+- Add `limit` on exploratory queries; remove for production
+- Never `select *` in production — enumerate columns
 - No aliasing unless SQL requires it (derived tables, self-joins/same table twice, name collisions,
   computed columns); otherwise reference tables by name and keep column names as-is. When required: `as`, ≥4 chars
 - Inline comments: as short as possible, only where needed (non-obvious join logic or business-rule
@@ -104,18 +106,21 @@ build it in numbered parts the user can assemble.
 **For dbt:**
 - Use `{{ ref('model_name') }}` for model references
 - Use `{{ source('schema', 'table') }}` for raw sources
-- Include `{{ config(materialized='table', dist='key', sort='key') }}` where appropriate
+- Include `{{ config(materialized='table', dist='<join_key_col>', sort='<date_col>') }}` where
+  appropriate — real column names, and name the chosen keys under Assumptions
 - Follow existing project naming conventions
 
 ### Step 4: Validate SQL Against Redshift Rules
 
 Before presenting any SQL, explicitly verify:
-- [ ] Date/time: `DATEADD(unit, n, date)` / `DATEDIFF(unit, start, end)` / `GETDATE()` — not `NOW()`, not `INTERVAL`
-- [ ] String aggregation: `LISTAGG(col, ',') WITHIN GROUP (ORDER BY ...)` — not `STRING_AGG`
-- [ ] JSON: `JSON_EXTRACT_PATH_TEXT(col, 'key')` — not `->`, `->>`, `jsonb_*`
+- [ ] Date/time: `dateadd(unit, n, date)` / `datediff(unit, start, end)` / `getdate()` — not `now()`, not `interval`
+- [ ] String aggregation: `listagg(col, ',') within group (order by ...)` — not `string_agg`
+- [ ] JSON: `json_extract_path_text(col, 'key')` — not `->`, `->>`, `jsonb_*`
+- [ ] No `median`/`percentile_cont`/`listagg` in the same query as any `count(distinct …)` (runtime error)
 - [ ] No `unnest()` on regular tables; no `generate_series` joined to user tables (leader-node only)
-- [ ] No `ON CONFLICT`; no `SERIAL`, `JSONB`, `UUID` native types, `CITEXT`
-- [ ] No `LATERAL` joins; prefer subqueries
+- [ ] No `on conflict`; no `serial`, `jsonb`, `uuid` native types, `citext`
+- [ ] No `lateral` joins; prefer subqueries
+- [ ] House style: lowercase, leading commas, 4-space indent, CTE bodies indented, lines ≤160
 - [ ] If dbt: Jinja syntax valid, `ref()`/`source()` used correctly, no hardcoded schema paths
 
 Call out the validation result in a single line beneath the code block.

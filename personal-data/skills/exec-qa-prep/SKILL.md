@@ -48,9 +48,10 @@ Do not generate soft questions. Generate the ones that will make an underprepare
 ## Gotcha Category
 
 Always generate a dedicated set of questions that expose gaps. For ActBlue data stories, cross-check
-the numbers against `~/.claude/actblue-data-dictionary.md` §11 (official metric definitions) and
-§18 (open definition conflicts — NRR version, refund convention, tips in/out): "which definition did
-you use?" is a guaranteed leadership question. Gap sources the presenter may not have anticipated:
+the numbers against `~/.claude/actblue-data-dictionary.md` sections "Official metric definitions"
+(NRR version, blog toplines incl. tips), "Refunds, chargebacks, disputes" (refund convention), and
+"Open questions & conflicts" — locate by heading text, not number: "which definition did you
+use?" is a guaranteed leadership question. Gap sources the presenter may not have anticipated:
 - Data freshness and completeness (is the most recent period complete?)
 - Population definition (who is included and excluded, and why?)
 - Survivorship bias or selection effects in the data
@@ -96,7 +97,12 @@ For each question, provide:
 **Derived-figure rule:** any number this skill computes itself (e.g. lift × volume = dollar
 impact) was never executed or QA'd — label it "derived — verify before quoting" and cap it at
 Medium confidence. High confidence is reserved for numbers that exist verbatim in the input
-artifacts.
+artifacts AND are verified (a verify-mode MATCH recorded in the analysis QA results, or one of
+analyze gate 7's stated exemptions, e.g. a figure the user supplied).
+
+**Unverified rule:** a number tagged `unverified`, or with no recorded verify MATCH, is at most
+Medium (Low if the tag gives a reason to doubt it), goes on the Prep Gaps list ("get it
+verified"), and may appear in the One-Line Summary only with an explicit "(unverified)" marker.
 
 ### Step 3: Flag Prep Gaps
 
@@ -158,6 +164,8 @@ The key words "MUST", "MUST NOT", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", 
   MUST read them before generating answers; every High-confidence answer MUST cite a specific
   artifact location; skill-derived numbers MUST carry the "derived — verify before quoting"
   label and MUST NOT be rated High
+- A number tagged `unverified` or lacking a recorded verify MATCH (or gate-7 exemption) MUST NOT be rated High and
+  MUST NOT appear in the One-Line Summary without an "(unverified)" marker
 - The skill MUST generate questions from all four executive perspectives in every invocation
 - The skill MUST include at least two Gotcha questions in every output
 - The skill MUST include the Prep Gaps section in every output, even if it is empty (in which case it MUST say "None — all anticipated questions are answerable from the current data")

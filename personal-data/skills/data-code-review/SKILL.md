@@ -6,7 +6,8 @@ description: >-
   fix), or Suggestion (optional improvement). Use when someone says: "review this code", "code
   review", "check this SQL", "is this query correct", "review my Python", "review the dbt model",
   "review this LookML", "critique this", "what's wrong with this", "LGTM check", "is this
-  production-ready", "check for bugs", "can you review this before I run it". For fresh-eyes
+  production-ready", "check for bugs", "can you review this before I run it", "fix this
+  query/SQL" (fix mode: review, then corrected code + change list, not executed). For fresh-eyes
   review of code AUTHORED IN THE CURRENT SESSION, dispatch the data-code-reviewer agent instead —
   its value is reviewing unanchored by the authoring context; this skill covers everything else.
   Do NOT use for general non-data code review (Rails, TypeScript) — use the code-review skill.
@@ -31,6 +32,7 @@ metadata:
       - filesystem:~/looker-reporting-db
       - filesystem:~/.claude/actblue-data-dictionary.md
       - filesystem:~/.claude/actblue-semantic-catalog
+      - warehouse:redshift-read-only (rs explain only — compile check, no data)
     writes:
       - filesystem:session-scratchpad (fetched copies of the artifact under review only)
     forbidden:
@@ -66,8 +68,14 @@ refund conventions) live in the rubric and the knowledge layer, not in this file
 3. **Load `rubric.md`** (same directory as this SKILL.md) and run every applicable pass.
    Resolve domain claims via `~/.claude/actblue-semantic-catalog/bin/catalog` and the data
    dictionary, honoring the rubric's precedence rule.
+   **Compile check:** for each standalone Redshift statement (not Jinja/LookML fragments), when
+   the warehouse is reachable, run `~/.claude/bin/rs explain "<query>"` — plan only, returns no
+   data. An ERROR is a Blocker; exit 3 (no connection) → say "compile check skipped" in Notes.
 4. **Compile findings** into the output format below.
 5. **Deliver the verdict**: approve / approve-with-warnings / block.
+6. **Fix mode** (the user asked to fix broken code, e.g. "fix this query"): after the review,
+   output the corrected code in house style plus a numbered change list keyed to the finding
+   numbers. Do not run it; offer to chain `personal-data:analyze` to execute and QA it.
 
 ## Output Format
 
@@ -101,7 +109,8 @@ The key words "MUST", "MUST NOT", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", 
 
 - This skill is read-only: the skill MUST NOT execute queries or modify any external system, and
   MUST NOT write files anywhere except fetched copies of the artifact under review in the
-  session scratchpad
+  session scratchpad. The sole warehouse exception is the step-3 compile check via
+  `~/.claude/bin/rs explain` (a plan, no data); never `rs sql`/`csv`/`peek`, even in fix mode
 - The skill MUST load and apply `rubric.md` — reviewing from memory or a paraphrased checklist is not acceptable
 - The skill MUST classify every finding per the rubric's grades and MUST reference a specific
   location in every finding; only genuine functional errors MAY be graded Blocker

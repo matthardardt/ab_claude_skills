@@ -30,13 +30,14 @@ metadata:
       - warehouse:redshift-read-only
     writes:
       - filesystem:working-directory
+      - git:fetch + ff-only pull on the default branch of reference clones
     forbidden:
       - resource: warehouse
         action: write
       - resource: any-mcp
         action: any
       - resource: git
-        action: commit/push in team repos
+        action: commit/push/remote-change/branch-switch/checkout in team repos
       - resource: filesystem-outside-working-directory
         action: write
 ---
@@ -58,25 +59,33 @@ one compact block per gate — this skill's whole value is being fast and boring
 The reference clones are the source of truth for real table names and team query patterns. A stale
 clone is worse than no clone: it answers confidently with last year's schema.
 
+Freshness is measured against the DEFAULT branch (production), not the checked-out one — a clone
+on a feature/sandbox branch can be "0 behind its upstream" while carrying unmerged, undeployed
+definitions.
+
 ```bash
 for r in ~/analytics ~/looker-reporting-db; do
-    printf '%s: ' "$r"; git -C "$r" log -1 --format='%h %ad %s' --date=short
+    git -C "$r" fetch -q origin
+    def=$(git -C "$r" symbolic-ref --short refs/remotes/origin/HEAD)
+    printf '%s: %s %s | behind/ahead %s: %s\n' "$r" "$(git -C "$r" rev-parse --abbrev-ref HEAD)" \
+        "$(git -C "$r" log -1 --format='%h %ad' --date=short)" "$def" \
+        "$(git -C "$r" rev-list --left-right --count "$def"...HEAD | tr '\t' '/')"
 done
 ```
 
 - Check only the clones the ask actually touches: `~/analytics` for any warehouse SQL,
   `~/looker-reporting-db` when a dashboard or LookML field is named, `~/ats/<repo>` when the
   answer depends on application code or a product behaviour.
-- Fetch and report how far behind the local branch is; pull `~/analytics` and
-  `~/looker-reporting-db` when behind. **Never commit or push in a team repo** — the user runs
-  git there themselves.
-- **`~/ats/*` SSH trap:** those clones carry SSH remotes and the agent has no key loaded, so
-  `git pull` fails — and a failed pull leaves a clone that reads as valid while being a year
-  stale. Check `git -C ~/ats/<repo> log -1` BEFORE trusting any `~/ats` code read; if it is
-  stale, switch the remote to HTTPS (`git -C ~/ats/<repo> remote set-url origin
-  https://github.com/actblue/<repo>.git`) and pull. Do not debug SSH.
-- State each clone's HEAD date in the report. If a pull is declined or fails, continue but carry
-  "schema grounded against a clone N days stale" into the report and the handoff.
+- **On the default branch:** `git pull --ff-only` when behind. **Off it:** never pull, switch, or
+  check anything out. Warn loudly (`WARN: <repo> on <branch>, N ahead / M behind origin/main —
+  definitions may be unmerged/undeployed`), and read production definitions via
+  `git -C <repo> show origin/main:<path>` or `git -C <repo> grep <pattern> origin/main`.
+- **`~/ats/*`:** check `git -C ~/ats/<repo> log -1` BEFORE trusting any code read. Several still
+  carry SSH remotes that fail silently here (no key loaded), leaving a clone that reads as valid
+  while years stale. Do NOT switch the remote — report it as a blocker with the fix for the user
+  (`git -C ~/ats/<repo> remote set-url origin https://github.com/actblue/<repo>.git`).
+- State each clone's branch, HEAD date, and behind/ahead in the report. If a fetch or pull fails,
+  continue but carry "schema grounded against a clone N days stale" into the report and handoff.
 
 ## Gate 2 — Connector and access proof
 
@@ -120,14 +129,17 @@ CAT=~/.claude/actblue-semantic-catalog/bin/catalog
 ```
 
 Write the result into a **definitions contract** — a short block that goes in the report, into
-`analysis.md` if one exists, and verbatim into the handoff:
+`analysis.md` if one exists, and verbatim into the handoff. Tag every item `(user)` if the ask
+stated it or `(DEFAULTED)` if preflight chose it — preflight never asks, so DEFAULTED items are
+open questions the downstream skill must put to the user:
 
 - **Metric expression** per metric, matching `catalog metric <name>` (or a stated reason it differs)
 - **Required filters**, resolved via `catalog filter` — canonical real-donations baseline is
   `is_paid is true and is_tip is false and is_refunded is false` (`is_tip` is never NULL in
   joined_lineitems; state the tips choice only when reading raw `indigo_aurora`)
 - **Counting key** — `contribution_sequence` vs `contribution_id` vs entity/donor
-- **Refund convention** — live vs published, or the valid-at-the-time variant
+- **Refund convention** — live (`real_donations`) vs published (`published_refunds` at the
+  reporting grain); first-time-donor metrics use none — see the catalog's `refund_conventions`
 - **Grain** — what one row of the result is
 - **Timezone** — indigo-derived timestamps (`paid_at`, `created_at`, `executed_at`, `effective_on`)
   are **US Eastern wall-clock, never UTC**: no `convert_timezone('UTC', …)`. Mixpanel `time` IS
@@ -177,10 +189,10 @@ Close with a compact report and one route:
 
 ```
 PREFLIGHT
-  clones      ~/analytics <sha> <date> (N behind|current) | others checked
+  clones      ~/analytics <branch> <sha> <date> (N behind / M ahead origin/main) | WARN off-main
   access      warehouse OK | BLOCKED: <reason + what the user must do>
   definitions <metric> = <expression>; filters <…>; counting key <…>;
-              refunds <…>; grain <…>; tz <…>; gates <…>
+              refunds <…>; grain <…>; tz <…>; gates <…>   (each tagged user|DEFAULTED)
   catalog     resolved <n>/<n> objects | TODOs: <…>
   first query <window> → <rows>, grain assertion pass/fail, partial period y/n
   widening    <rung reached> / <rung recommended next>
@@ -190,7 +202,9 @@ PREFLIGHT
 Then hand off with the definitions contract attached verbatim: `/analyze` for an interactive
 analysis, the `warehouse-analyst` agent for fully-specified or parallel pulls,
 `/experiment-design` if the ask turned out to carry a causal claim, or `/refresh-pipeline` if the
-target is a re-runnable refresh step. Preflight does not write the analysis.
+target is a re-runnable refresh step. Preflight does not write the analysis. DEFAULTED items go
+into analyze's question batch; before a `warehouse-analyst` dispatch, ask them first or mark them
+as material axes so the agent computes both readings.
 
 ## Constraints
 
@@ -211,10 +225,12 @@ The key words "MUST", "MUST NOT", "SHALL", "SHOULD", "SHOULD NOT", "MAY" are per
 - On catalog-vs-dictionary conflict the dictionary's `[validated]` fact MUST win, and the skill
   MUST note the catalog discrepancy
 - The skill MUST check `git log -1` on any `~/ats/*` clone before treating its code as current,
-  and MUST report each consulted clone's HEAD date in the preflight report
-- The skill MUST NOT commit, push, or otherwise write in `~/analytics`, `~/looker-reporting-db`,
-  or `~/ats/*` — fetch and pull only — and MUST NOT run `git push` to ANY remote without the
+  and MUST report each consulted clone's branch, HEAD date, and behind/ahead vs the default branch
+- In `~/analytics`, `~/looker-reporting-db`, and `~/ats/*` the skill MAY only `git fetch` and
+  `git pull --ff-only` on the default branch; it MUST NOT commit, push, switch remotes or branches,
+  or check anything out — it reports instead. It MUST NOT run `git push` to ANY remote without the
   user's express, confirmed permission in the current conversation
+- Every definitions-contract item MUST be tagged `user` or `DEFAULTED`
 - On `rs ping` exit 3 the skill MUST report a probable VPN/connection problem and ask the user to
   connect; it MUST NOT attribute a connection failure to credentials, nor a SQL error (exit 4) to
   the VPN
