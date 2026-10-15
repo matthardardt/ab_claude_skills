@@ -33,18 +33,42 @@ for cmd, agent, want in CASES:
     got = pre(cmd, agent)
     if got != want:
         fails += 1; print(f"FAIL {cmd!r} agent={agent}: want {want} got {got}")
-STOP = [
-    ({"last_assistant_message": "STATUS: OK\nVERIFIED: no — primary pull"}, None),
-    ({"last_assistant_message": "**VERDICT:** MATCH (exact, 1,234)"}, None),
-    ({"last_assistant_message": "STATUS: UNDERSPECIFIED\n1. which period?"}, None),
-    ({"last_assistant_message": "- STATUS: OK\n- VERIFIED: no"}, None),
-    ({"last_assistant_message": "here are the numbers"}, "block"),
-    ({"last_assistant_message": "STATUS: OK"}, "block"),
-    ({"last_assistant_message": "nothing", "stop_hook_active": True}, None),
+def hb(msg, agent=A):
+    r = run("handback", {"agent_type": agent, "tool_input": {"message": msg}})
+    return r["hookSpecificOutput"]["permissionDecision"] if r else None
+
+HANDBACK = [
+    ("STATUS: OK\nVERIFIED: no — primary pull", A, None),
+    ("**VERDICT:** MATCH (exact, 1,234)", A, None),
+    ("STATUS: UNDERSPECIFIED\n1. which period?", A, None),
+    ("- STATUS: OK\n- VERIFIED: no", A, None),
+    ("here are the numbers", A, "deny"),
+    ("STATUS: OK\nTotal $4.2M", A, "deny"),
+    ("here are the numbers", "personal-data:lookml-grounder", None),
+    ("here are the numbers", "general-purpose", None),
 ]
-for ev, want in STOP:
-    r = run("subagentstop", ev); got = r and r.get("decision")
+for msg, agent, want in HANDBACK:
+    got = hb(msg, agent)
     if got != want:
-        fails += 1; print(f"FAIL stop {ev}: want {want} got {got}")
-n = len(CASES) + len(STOP)
+        fails += 1; print(f"FAIL handback {msg!r} agent={agent}: want {want} got {got}")
+
+def ar(tool_input, tool_response):
+    r = run("agent_result", {"tool_input": tool_input, "tool_response": tool_response})
+    return "flag" if r and "additionalContext" in r.get("hookSpecificOutput", {}) else None
+
+WA = {"subagent_type": A}
+RESULT = [  # shapes mirror the live 2026-10-15 toolUseResult
+    (WA, {"status": "completed", "agentType": A, "handbackReport": {"text": "I didn't run anything."}}, "flag"),
+    (WA, {"status": "completed", "agentType": A, "handbackReport": {"text": "STATUS: OK\nVERIFIED: no"}}, None),
+    (WA, {"status": "completed", "agentType": A, "content": [{"type": "text", "text": "numbers only"}]}, "flag"),
+    (WA, {"status": "completed", "agentType": A, "content": [{"type": "text", "text": "VERDICT: MATCH"}]}, None),
+    (WA, {"status": "async_launched", "agentId": "x"}, None),
+    ({"subagent_type": "general-purpose"}, {"status": "completed", "content": "no status here"}, None),
+    (WA, "plain string response", None),
+]
+for ti, tr, want in RESULT:
+    got = ar(ti, tr)
+    if got != want:
+        fails += 1; print(f"FAIL agent_result {tr!r}: want {want} got {got}")
+n = len(CASES) + len(HANDBACK) + len(RESULT)
 print(f"{'OK' if not fails else 'FAILED'} — {n - fails}/{n} cases pass"); sys.exit(1 if fails else 0)

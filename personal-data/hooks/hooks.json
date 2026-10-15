@@ -1,5 +1,5 @@
 {
-  "description": "personal-data guardrails: block egress/git-write/raw-DB commands inside the plugin's agents, ask before any git push, and require a STATUS/VERIFIED contract from warehouse-analyst before it returns.",
+  "description": "personal-data guardrails: block egress/git-write/raw-DB commands inside the plugin's agents, ask before any git push, and enforce warehouse-analyst's STATUS/VERIFIED (or VERDICT) return contract at handback, with a parent-side backstop.",
   "hooks": {
     "PreToolUse": [
       {
@@ -8,20 +8,40 @@
           {
             "type": "command",
             "command": "python3",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/guard.py", "pretooluse"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/guard.py",
+              "pretooluse"
+            ],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "SubagentHandback",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/guard.py",
+              "handback"
+            ],
             "timeout": 10
           }
         ]
       }
     ],
-    "SubagentStop": [
+    "PostToolUse": [
       {
-        "matcher": "personal-data:warehouse-analyst|warehouse-analyst",
+        "matcher": "Agent|Task",
         "hooks": [
           {
             "type": "command",
             "command": "python3",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/guard.py", "subagentstop"],
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/hooks/guard.py",
+              "agent_result"
+            ],
             "timeout": 10
           }
         ]

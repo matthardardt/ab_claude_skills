@@ -48,7 +48,10 @@ path skills, agents, and CLAUDE.md reference. Never point components at the per-
   frontmatter hooks are ignored by Claude Code, so scoping is by `agent_type` inside the script):
   any `git … push` (incl. `git -C dir push`) → ask in every session; inside `personal-data:*` agents
   → deny git writes, network egress, raw DB clients, package installs; warehouse-analyst's final
-  report must carry STATUS/VERIFIED or VERDICT lines (blocks once). Fails open on its own errors.
+  report must carry STATUS/VERIFIED or VERDICT lines — enforced by denying the `SubagentHandback`
+  call (the report travels there, not in the final message; a SubagentStop check fired only after
+  delivery — live test 2026-10-15), with a PostToolUse backstop on Agent results that flags a
+  non-compliant report to the parent as UNVERIFIED. Fails open on its own errors.
   Any change requires a case in `hooks/tests/test_guard.py`.
 - **One review rubric**: `personal-data/skills/data-code-review/rubric.md` is loaded by both the
   review skill and the reviewer agent. Never fork a second checklist.
