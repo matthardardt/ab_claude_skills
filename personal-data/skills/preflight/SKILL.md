@@ -155,6 +155,12 @@ grep `~/.claude/actblue-data-dictionary-sources/` and `~/analytics`, confirm aga
 catalog (`rs find` / `rs cols`), and record a catalog TODO. Never invent a table or column name,
 and never substitute a plausible-looking neighbour for one you cannot find.
 
+**Live drift (catalog vs warehouse):** for each catalog table in the contract, run
+`~/.claude/actblue-semantic-catalog/bin/catalog drift columns enums --table <key>` (read-only, ~1 min
+each; skip `joins`, which scans whole tables). Any finding on a contract column or dimension value
+is a blocker for that object until resolved from `rs cols` / a distinct-values probe; record it as
+a catalog TODO. Exit 3 = warehouse unreachable — say so in the report, never "no drift".
+
 Prefer `production_*` schemas. `rs find` also returns per-analyst `dbt_<user>_*` dev copies —
 those are SAMPLED builds (zero ACH rows anywhere), so never conclude "no data exists" from them.
 `indigo_cdc` does not exist on this cluster; use `indigo_aurora`.
@@ -193,7 +199,7 @@ PREFLIGHT
   access      warehouse OK | BLOCKED: <reason + what the user must do>
   definitions <metric> = <expression>; filters <…>; counting key <…>;
               refunds <…>; grain <…>; tz <…>; gates <…>   (each tagged user|DEFAULTED)
-  catalog     resolved <n>/<n> objects | TODOs: <…>
+  catalog     resolved <n>/<n> objects | drift: <clean | n findings | unreachable> | TODOs: <…>
   first query <window> → <rows>, grain assertion pass/fail, partial period y/n
   widening    <rung reached> / <rung recommended next>
   BLOCKERS    <anything the user must resolve>

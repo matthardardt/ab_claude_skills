@@ -25,7 +25,8 @@ path skills, agents, and CLAUDE.md reference. Never point components at the per-
 ## Release workflow (every change batch)
 
 1. Edit in the source repo. Run the tests:
-   `python3 personal-data/skills/analyze/scripts/tests/test_sql_guard.py`
+   `python3 personal-data/skills/analyze/scripts/tests/test_sql_guard.py` and
+   `python3 personal-data/hooks/tests/test_guard.py`
 2. If scripts changed: re-run `setup_env.sh` (reinstalls `~/.claude/bin`, gated on the tests).
 3. Bump `personal-data/.claude-plugin/plugin.json` AND the matching `plugins[]` entry in
    `.claude-plugin/marketplace.json` (they must stay equal).
@@ -43,6 +44,12 @@ path skills, agents, and CLAUDE.md reference. Never point components at the per-
   (native-triggerable skills do NOT get mirror rows). The router names only installed skills.
 - **One validator**: all read-only SQL validation lives in `sql_guard.py`; `rs` and `rs_query.py`
   both delegate to it. Any change requires a golden-corpus case in `tests/test_sql_guard.py`.
+- **Hooks** (`personal-data/hooks/hooks.json` → `guard.py`, loaded at session start; plugin-agent
+  frontmatter hooks are ignored by Claude Code, so scoping is by `agent_type` inside the script):
+  any `git … push` (incl. `git -C dir push`) → ask in every session; inside `personal-data:*` agents
+  → deny git writes, network egress, raw DB clients, package installs; warehouse-analyst's final
+  report must carry STATUS/VERIFIED or VERDICT lines (blocks once). Fails open on its own errors.
+  Any change requires a case in `hooks/tests/test_guard.py`.
 - **One review rubric**: `personal-data/skills/data-code-review/rubric.md` is loaded by both the
   review skill and the reviewer agent. Never fork a second checklist.
 - **Embedded domain facts** (canonical filter, ACH gate, cluster facts in analyze/warehouse-analyst/rubric)

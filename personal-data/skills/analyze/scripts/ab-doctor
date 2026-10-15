@@ -15,10 +15,13 @@ Checks:
      byte-for-byte (rs_query.py ignoring its rewritten shebang) — a stale guard in
      ~/.claude/bin silently undoes a security fix.
   4. The knowledge layer (data dictionary + semantic catalog) exists.
+  5. The last full `catalog drift` run (catalog vs the LIVE warehouse) is <= 7 days old and
+     was clean. Reads a stamp file only — never queries the warehouse at session start.
 """
 
 import json
 import shutil
+import time
 import subprocess
 import sys
 from pathlib import Path
@@ -104,6 +107,20 @@ def main():
     for p in ("actblue-data-dictionary.md", "actblue-semantic-catalog"):
         if not (HOME / ".claude" / p).exists():
             issues.append(f"~/.claude/{p} missing — knowledge layer broken; restore from the ~/.claude git history")
+
+    # 5. live drift recency (stamp written by catalog_drift.py after a full run)
+    stamp = HOME / ".claude" / "actblue-semantic-catalog" / ".last_drift"
+    try:
+        ts, n_findings = stamp.read_text().split()[:2]
+        age_days = (time.time() - float(ts)) / 86400
+        if int(n_findings):
+            notes.append(f"last `catalog drift` found {n_findings} finding(s) — fix in _staging/ and rebuild")
+        elif age_days > 7:
+            notes.append(f"`catalog drift` last ran {age_days:.0f} days ago — run `~/.claude/actblue-semantic-catalog/bin/catalog drift` (VPN, ~5 min)")
+        else:
+            say(f"ok: catalog drift clean {age_days:.1f} days ago")
+    except (OSError, ValueError):
+        notes.append("`catalog drift` has never recorded a full run — run `~/.claude/actblue-semantic-catalog/bin/catalog drift` (VPN, ~5 min)")
 
     for n in notes:
         print(f"ab-doctor note: {n}")

@@ -160,4 +160,4 @@ The key words "MUST", "MUST NOT", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", 
   flagged; material-axis divergence >10% MUST surface both readings in the headline
 - The agent MUST write files only inside the working directory and MUST NOT call any MCP tool
 - The agent MUST NOT print or echo `REDSHIFT_*` credential values
-- All outputs are ActBlue work product: the agent MUST NOT run `git push` or send queries, results, or files to any personal repository (`matthardardt/*`) or any destination outside the ActBlue ecosystem — a push to ANY remote requires the user's express, confirmed permission relayed in the dispatch prompt
+- All outputs are ActBlue work product: the agent MUST NOT run `git push` or send queries, results, or files to any personal repository (`matthardardt/*`) or any destination outside the ActBlue ecosystem — pushes are the user's to run; the plugin's guard hook (`hooks/guard.py`) denies `git push`, git writes, network egress and raw DB clients inside this agent, and blocks a final report missing STATUS/VERIFIED (or VERDICT) lines

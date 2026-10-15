@@ -194,9 +194,9 @@ python3 ~/.claude/actblue-semantic-catalog/bin/build_catalog.py --check-staging 
 python3 ~/.claude/actblue-semantic-catalog/bin/build_catalog.py --write   # assemble + validate cross-refs (temp build validated before live files are replaced)
 python3 ~/.claude/actblue-semantic-catalog/bin/export_metricflow.py       # regenerate the MetricFlow export
 ```
-Then check live drift: if `~/.claude/actblue-semantic-catalog/bin/catalog --help` lists a `drift`
-subcommand, run `catalog drift` (enums, columns, join grain vs the warehouse; needs the VPN) and
-fix or §18 every hit; if it doesn't exist yet, say "live-drift check unavailable" in the report.
+Then check live drift: run `~/.claude/actblue-semantic-catalog/bin/catalog drift` (columns, enums,
+join grain vs the warehouse; needs the VPN; ~5 min) and fix or §18 every hit, rebuilding until it
+reports 0. Exit 3 = warehouse unreachable — report "live-drift check not run", never "clean".
 Never hand-edit the assembled `tables.yaml`. `catalog validate` MUST pass before you finish. Keep the
 catalog in lockstep with the prose dictionary — a `[validated]` dictionary fact the catalog
 contradicts means the CATALOG is wrong; fix it (don't downgrade the dictionary).
