@@ -55,9 +55,10 @@ with the catalog or is silent.
 
 - Counting key: contributions = `count(distinct contribution_sequence)`; flag `contribution_id`
   counts presented as "contributions"
-- Tips excluded where the metric requires it — and note `is_tip` is NULLable: bare
-  `is_tip = false` drops tips-unknown rows; `(is_tip is false or is_tip is null)` when they
-  should count. Internal tip entities 33605/26969 excluded where relevant
+- Tips excluded where the metric requires it (not for published sitewide toplines, which
+  include tips). `is_tip` is never NULL in joined_lineitems; on raw `indigo_aurora` a bare
+  `is_tip = false` drops tips-unknown rows. Internal entities excluded via `is_actblue_entity is
+  true` where relevant — flag any hardcoded 33605/26969 list as stale
 - Canonical real-donations filter present, or its absence justified
 - ACH analysis gated on `paid_at >= '2026-04-20'` (legacy-ACH trap)
 - Cents vs dollars (`extended_lineitems.amount` is cents; `istip` there is a string)

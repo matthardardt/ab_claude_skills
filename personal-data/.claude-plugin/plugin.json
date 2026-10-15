@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "personal-data",
-  "version": "0.7.3",
+  "version": "0.8.0",
   "description": "Data science and analytics toolkit for the ActBlue data team. Front-door router (ab), cold-start preflight that refreshes clones, proves warehouse access, builds a semantic-catalog definitions contract and caps the first query before widening (preflight), end-to-end warehouse analysis with live read-only Redshift execution and mandatory independent number verification (analyze), multi-grain manual-tile refresh pipeline (refresh-pipeline), causal design + power (experiment-design), code artifact generation (code-draft), rubric-based code review (data-code-review + fresh-context data-code-reviewer agent), executive Q&A prep (exec-qa-prep), quarterly staged dictionary refresh (dictionary-refresh), and dispatchable agents (warehouse-analyst incl. verify mode, lookml-grounder). Covers Redshift SQL, Python, dbt, and LookML workflows.",
   "keywords": [
     "data",

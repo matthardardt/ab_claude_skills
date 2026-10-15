@@ -124,8 +124,8 @@ Write the result into a **definitions contract** — a short block that goes in 
 
 - **Metric expression** per metric, matching `catalog metric <name>` (or a stated reason it differs)
 - **Required filters**, resolved via `catalog filter` — canonical real-donations baseline is
-  `is_paid is true and is_tip is false and is_refunded is false`; `is_tip` is NULLable, so state
-  whether tips-unknown rows count (`is_tip is false or is_tip is null`)
+  `is_paid is true and is_tip is false and is_refunded is false` (`is_tip` is never NULL in
+  joined_lineitems; state the tips choice only when reading raw `indigo_aurora`)
 - **Counting key** — `contribution_sequence` vs `contribution_id` vs entity/donor
 - **Refund convention** — live vs published, or the valid-at-the-time variant
 - **Grain** — what one row of the result is

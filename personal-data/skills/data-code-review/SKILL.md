@@ -49,7 +49,7 @@ improved — in that order. Don't pad the review with praise. Don't soften Block
 **The checklist is single-sourced: load `rubric.md` from this skill's directory and apply it.**
 It carries the grading rules, the correctness/Redshift/domain/dbt/Python/LookML passes, the
 catalog cross-check with its dictionary-outranks-catalog precedence rule, and the style pass.
-Do not review from memory — the domain traps (NULLable is_tip, ACH legacy gate, counting keys,
+Do not review from memory — the domain traps (is_tip NULLs on raw tables, ACH legacy gate, counting keys,
 refund conventions) live in the rubric and the knowledge layer, not in this file.
 
 ## Workflow

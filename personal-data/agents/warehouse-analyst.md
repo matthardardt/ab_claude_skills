@@ -60,8 +60,8 @@ dollars. Demographic joins via `md5(lower(email))`. All indigo-derived timestamp
 Eastern wall-clock, not UTC** — never `convert_timezone('UTC', …)` them. ACH analyses gate on
 `paid_at >= '2026-04-20'` (legacy-ACH trap). Canonical real-donations filter: resolve via
 `catalog filter real_donations` — baseline `is_paid is true and is_tip is false and is_refunded
-is false`, noting `is_tip` is NULLable (`(is_tip is false or is_tip is null)` when tips-unknown
-rows should count — say which you used). If the catalog and the prose dictionary disagree, the
+is false` (`is_tip` is never NULL in joined_lineitems — dbt coerces it; the NULL guard only
+matters on raw `indigo_aurora`). If the catalog and the prose dictionary disagree, the
 dictionary's `[validated]` fact wins; note the catalog gap in your report.
 
 ## Workflow

@@ -20,8 +20,16 @@ Design notes:
   let `; drop ...` through — proven bypass, hence the scanner.
 - Double-quoted identifiers are replaced with a neutral token, so a column
   literally named comment/set/copy is usable by quoting it: select "comment" from t.
+- The scanner must lex EXACTLY like Redshift, or text the guard thinks is a
+  literal/comment executes as code (2026-10-15 review, proven live). Redshift
+  rules mirrored here: backslash escapes inside '...' strings (\' does not close
+  the string); `--` comments end at \n OR \r; `$` is an identifier character, so
+  `a$b$` is a name, not the start of a dollar quote. Dollar quotes have no
+  read-only use and are rejected outright.
+- Side-effecting functions callable from a SELECT (set_config,
+  pg_terminate_backend, ...) are blocked by name.
 - needs_limit is TAIL-anchored: an inner subquery LIMIT no longer suppresses the
-  outer row cap.
+  outer row cap. A leading `select [distinct] top N` also counts as capped.
 - strip_tail removes trailing whitespace, trailing comments, and terminal
   semicolons from the RAW text (comment-aware), so `rs` can safely append
   `limit N` or wrap in EXPLAIN even when the query ends `; -- done`.
@@ -41,6 +49,11 @@ WRITE_KEYWORDS = re.compile(
 )
 
 _DOLLAR_TAG = re.compile(r"\$(\w*)\$")
+
+SIDE_EFFECT_FUNCS = re.compile(
+    r"\b(set_config|pg_terminate_backend|pg_cancel_backend|pg_reload_conf|pg_rotate_logfile"
+    r"|pg_advisory_\w+|pg_try_advisory_\w+|dblink\w*|lo_\w+)\s*\("
+)
 
 
 class GuardError(Exception):
@@ -65,6 +78,9 @@ def _segments(sql: str):
             flush_code(i)
             j = i + 1
             while j < n:
+                if sql[j] == "\\":
+                    j += 2  # Redshift: backslash escapes the next char, incl. a quote
+                    continue
                 if sql[j] == "'":
                     if j + 1 < n and sql[j + 1] == "'":
                         j += 2
@@ -90,7 +106,8 @@ def _segments(sql: str):
             i = end
             code_start = i
         elif c == "$":
-            m = _DOLLAR_TAG.match(sql, i)
+            prev = sql[i - 1] if i > 0 else ""
+            m = None if (prev.isalnum() or prev in "_$") else _DOLLAR_TAG.match(sql, i)
             if m:
                 flush_code(i)
                 tag = m.group(0)
@@ -103,8 +120,8 @@ def _segments(sql: str):
                 i += 1
         elif c == "-" and nxt == "-":
             flush_code(i)
-            j = sql.find("\n", i)
-            end = n if j == -1 else j  # the newline itself stays code
+            ends = [k for k in (sql.find("\n", i), sql.find("\r", i)) if k != -1]
+            end = min(ends) if ends else n  # the line break itself stays code
             segs.append((i, end, "lcomment"))
             i = end
             code_start = i
@@ -184,6 +201,11 @@ def validate_readonly(sql: str) -> None:
         )
     if ";" in norm.rstrip().rstrip(";"):
         raise GuardError("blocked — multiple statements not allowed")
+    if any(k == "dollar" for _, _, k in _segments(sql)):
+        raise GuardError("blocked — dollar-quoted strings are not allowed in read-only queries")
+    hit = SIDE_EFFECT_FUNCS.search(norm)
+    if hit:
+        raise GuardError(f"blocked — side-effecting function: {hit.group(1)}")
 
 
 def needs_limit(sql: str, first_words_exempt=("explain", "show")) -> bool:
@@ -191,6 +213,8 @@ def needs_limit(sql: str, first_words_exempt=("explain", "show")) -> bool:
     norm = normalize(sql)
     words = re.findall(r"[a-z_]+", norm)
     if not words or words[0] in first_words_exempt:
+        return False
+    if re.match(r"\s*select\s+(distinct\s+)?top\s+\d+\b", norm):
         return False
     tail = norm.rstrip().rstrip(";").rstrip()
     return not re.search(r"\blimit\s+(\d+|all)(\s+offset\s+\d+)?$", tail)

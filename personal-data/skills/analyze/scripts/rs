@@ -22,13 +22,20 @@
 # (usually AB VPN off), 4 = query failed server-side (SQL error, timeout, perms).
 set -euo pipefail
 
-RS_VERSION="1.1.0"
+RS_VERSION="1.2.0"
 TIMEOUT_MS="${RS_TIMEOUT_MS:-300000}"   # 5 min default statement timeout
 ROW_CAP="${RS_ROW_CAP:-500}"            # row cap for `rs sql` table output
 HERE="$(cd "$(dirname "$0")" && pwd -P)"
 GUARD="$HERE/sql_guard.py"
 
 die() { echo "rs: $*" >&2; exit "${2:-2}"; }
+
+# Both values are pasted into SQL, so they must be plain positive integers
+# (2026-10-15: RS_TIMEOUT_MS='0; <stmt>' ran arbitrary SQL; 0 disabled the timeout).
+case "$TIMEOUT_MS" in ''|*[!0-9]*) die "RS_TIMEOUT_MS must be a positive integer of milliseconds (got: $TIMEOUT_MS)" ;; esac
+case "$ROW_CAP" in ''|*[!0-9]*) die "RS_ROW_CAP must be a positive integer (got: $ROW_CAP)" ;; esac
+[ "$TIMEOUT_MS" -ge 1000 ] && [ "$TIMEOUT_MS" -le 3600000 ] || die "RS_TIMEOUT_MS must be 1000..3600000 (got: $TIMEOUT_MS)"
+[ "$ROW_CAP" -ge 1 ] || die "RS_ROW_CAP must be >= 1"
 
 [ -f "$GUARD" ] || die "sql_guard.py not found next to rs ($GUARD) — reinstall with setup_env.sh"
 
@@ -144,7 +151,7 @@ case "$MODE" in
         ;;
     find)
         P="${1:?usage: rs find <pattern>}"
-        case "$P" in *\'*) die "invalid pattern" ;; esac
+        printf '%s' "$P" | grep -qE '^[A-Za-z0-9_%]+$' || die "invalid pattern (letters, digits, _ and % only)"
         load_creds
         run_psql "select table_schema, table_name, table_type from svv_tables where table_name ilike '%${P}%' and table_schema not in ('pg_catalog', 'information_schema') order by table_schema, table_name limit 100"
         ;;

@@ -129,8 +129,8 @@ and synthesize their table/filter findings; keep live catalog probes in the main
 **Known canonical objects** (verify each time — schema drifts):
 - Prefer `production_*` schemas — `rs find` also returns per-analyst dev copies
   (`dbt_<user>_core_tables.*`); those are SAMPLED — never conclude "no data" from them.
-- `production_core_tables.joined_lineitems` — EXTERNAL (Spectrum) table at transaction/payment
-  grain (one row per paid lineitem); best for donation volume/$ trends, but always filter —
+- `production_core_tables.joined_lineitems` — EXTERNAL (Spectrum) table at LINEITEM grain (one
+  row per paid lineitem; tandem gifts split a payment into several, so never `count(*)`); best for donation volume/$ trends, but always filter —
   unfiltered scans are slow and costly. Key cols: `paid_at`, `amount_dollars`, `is_paid`, `is_tip`,
   `is_refunded`, `refunded_at`, `is_recurring`, `recurrence_number`, `contribution_sequence`,
   `donor_email`, `entity_id`, `cycle`, `contribution_id`, `payment_method`.
@@ -141,8 +141,8 @@ and synthesize their table/filter findings; keep live catalog probes in the main
   need a schema swap; dbt docs still use it as a source NAME only).
 
 **Canonical "real donations" filter:** resolve via `catalog filter real_donations`; the baseline is
-`is_paid is true and is_tip is false and is_refunded is false` — note `is_tip` is NULLable: use
-`(is_tip is false or is_tip is null)` when tips-unknown rows should count, and say which you chose.
+`is_paid is true and is_tip is false and is_refunded is false` (`is_tip` is never NULL in
+joined_lineitems; the NULL guard only matters on raw `indigo_aurora`).
 Valid-at-the-time variant: `(is_refunded is false or refunded_at::date > <period_end>)`.
 
 ## Phase 2 — Write and Validate SQL, then pre-register expectations

@@ -42,6 +42,15 @@ python3 "$HERE/tests/test_sql_guard.py"
 
 # --- 3. install to the stable runtime path ---
 mkdir -p "$BIN"
+# never let an older copy (e.g. a stale versioned cache) overwrite a newer install
+ver() { sed -nE 's/^RS_VERSION="([^"]+)".*/\1/p' "$1" 2>/dev/null; }
+NEW_VER="$(ver "$HERE/rs")"; OLD_VER="$(ver "$BIN/rs")"
+if [ -n "$OLD_VER" ] && [ "$OLD_VER" != "$NEW_VER" ] \
+   && [ "$(printf '%s\n%s\n' "$OLD_VER" "$NEW_VER" | sort -V | tail -1)" = "$OLD_VER" ] \
+   && [ "${FORCE_DOWNGRADE:-}" != "1" ]; then
+    echo "setup_env: refusing to downgrade ~/.claude/bin/rs $OLD_VER -> $NEW_VER (from $HERE). Run from the newest copy, or FORCE_DOWNGRADE=1." >&2
+    exit 1
+fi
 install -m 0755 "$HERE/rs" "$BIN/rs"
 install -m 0755 "$HERE/sql_guard.py" "$BIN/sql_guard.py"
 # rewrite rs_query.py's shebang to this machine's venv python

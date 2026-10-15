@@ -42,6 +42,14 @@ ALLOW = [
     "select '/* not a comment */' as y",
     # trailing semicolon is fine (single statement)
     "select 1;",
+    # $ inside identifiers is legal Redshift and is NOT a dollar quote (2026-10-15)
+    "select 1 as a$b$",
+    "select price$ from foo",
+    # backslash-escaped quote stays inside the string
+    "select 'it\\'s fine; drop nothing' as s",
+    "select 'a\\'; drop table foo; select '",  # one literal under Redshift's backslash rule
+    # TOP is a supported row cap
+    "select top 10 * from foo",
 ]
 
 BLOCK = [
@@ -74,6 +82,19 @@ BLOCK = [
     "select 1 -- don't\n; drop table foo -- x'",
     "select 1 /* ' */ ; drop table foo /* ' */",
     "select count(*) from d -- founder's\n; delete from d -- boss's",
+    # 2026-10-15 review: lexer mismatches with Redshift, all proven to run as 2 statements
+    "select 1 as a$b$; drop table foo; select 1 as c$b$",
+    "select 'a\\''; drop table foo; --'",
+    "select 1 -- note\rdrop table foo",
+    "select 1 -- note\r; delete from foo",
+    # dollar quotes have no read-only use
+    "select $q$anything$q$",
+    "select $$x$$",
+    # side-effecting functions reachable from SELECT
+    "select set_config('statement_timeout', '0', false)",
+    "select pg_terminate_backend(12345)",
+    "select pg_cancel_backend(12345)",
+    "select PG_TERMINATE_BACKEND (1)",
     # first-word gate
     "with foo as (select 1) delete from bar",
     "",
@@ -97,6 +118,10 @@ LIMIT_CASES = [
     ("show search_path", False),
     # trailing comment after the final semicolon still wants a cap
     ("select 1; -- done", True),
+    # TOP already caps (appending LIMIT errors: "multiple LIMIT clauses")
+    ("select top 10 * from t", False),
+    ("SELECT DISTINCT TOP 5 x from t", False),
+    ("select * from t where id in (select top 5 id from u)", True),
 ]
 
 # (sql, expected strip_tail output) — used before appending LIMIT / wrapping EXPLAIN

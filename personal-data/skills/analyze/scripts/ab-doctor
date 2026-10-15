@@ -11,7 +11,9 @@ Checks:
      the marketplace clone and prints a loud RESTART warning (skills load at startup).
   2. The marketplace clone's git HEAD matches the recorded gitCommitSha (drift warning
      only — never auto-syncs git state).
-  3. ~/.claude/bin/rs and sql_guard.py exist (warehouse access path).
+  3. ~/.claude/bin/rs and sql_guard.py exist AND match the marketplace clone's source
+     byte-for-byte (rs_query.py ignoring its rewritten shebang) — a stale guard in
+     ~/.claude/bin silently undoes a security fix.
   4. The knowledge layer (data dictionary + semantic catalog) exists.
 """
 
@@ -80,10 +82,23 @@ def main():
         pass
 
     # 3. runtime scripts
+    src_dir = CLONE / "personal-data" / "skills" / "analyze" / "scripts"
     for f in ("rs", "sql_guard.py", "rs_query.py", "ab-doctor"):
-        if not (HOME / ".claude" / "bin" / f).exists():
+        installed = HOME / ".claude" / "bin" / f
+        if not installed.exists():
             issues.append(f"~/.claude/bin/{f} missing — run setup_env.sh from the plugin's analyze/scripts dir")
-            break
+            continue
+        src = src_dir / f
+        if not src.exists():
+            continue
+        a, b = installed.read_bytes(), src.read_bytes()
+        if f == "rs_query.py":
+            a, b = a.split(b"\n", 1)[-1], b.split(b"\n", 1)[-1]
+        if a != b:
+            issues.append(
+                f"~/.claude/bin/{f} differs from the marketplace clone — run setup_env.sh from "
+                f"{src_dir} (or sync the clone first if ~/.claude/bin is the newer one)"
+            )
 
     # 4. knowledge layer
     for p in ("actblue-data-dictionary.md", "actblue-semantic-catalog"):
